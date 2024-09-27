@@ -5,15 +5,17 @@ CXX = g++
 LD = g++
 OPTIMIZATION = -O2
 INCLUDE_FLAGS = -I./src
-CFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS)
-CXXFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS)
-LIBS = -lpthread
+DEFFLAGS = -D_GNU_SOURCE
+CFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
+CXXFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
 LDFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION)
 DEPFLAGS = -MT "$@" -MMD -MP -MF $(@:.o=.d)
+LIBS = -lpthread
 TARGET = proxmasterd
 
 C_SOURCES = \
-	src/proxmasterd/entry.c
+	src/proxmasterd/entry.c \
+	src/proxmasterd/net.c
 
 CXX_SOURCES =
 
