@@ -1,0 +1,8 @@
+*.o
+*.so
+*.swo
+*.log
+*.swp
+*.tmp
+*.out
+/proxmasterd
