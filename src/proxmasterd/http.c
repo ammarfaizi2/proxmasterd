@@ -14,6 +14,8 @@ struct pm_http_ctx {
 
 struct pm_http_client {
 	uint8_t				method;
+	struct pm_buf			*recv_buf;
+	struct pm_buf			*send_buf;
 };
 
 int pm_http_ctx_init(pm_http_ctx_t **ctx_p)
@@ -203,15 +205,66 @@ void pm_http_ctx_destroy(pm_http_ctx_t *ctx_p)
 	memset(ctx_p, 0, sizeof(*ctx_p));
 }
 
+static struct pm_http_client *pm_http_alloc_client(void)
+{
+	struct pm_http_client *c;
+
+	c = calloc(1, sizeof(*c));
+	if (!c)
+		return NULL;
+
+	return c;
+}
+
+static const char http_res[] = "HTTP/1.1 200 OK\r\n"
+	"Content-Type: text/plain\r\n"
+	"Content-Length: 13\r\n"
+	"\r\n"
+	"Hello World!\n";
+
+static int pm_http_handle_recv(struct pm_http_client *hc)
+{
+	struct pm_buf *recv_buf = hc->recv_buf;
+	struct pm_buf *send_buf = hc->send_buf;
+
+	memcpy(send_buf->buf, http_res, sizeof(http_res));
+	send_buf->len = sizeof(http_res) - 1;
+	return 0;
+}
+
+static int pm_http_recv_cb(pm_net_tcp_client_t *c)
+{
+	return pm_http_handle_recv(pm_net_tcp_client_get_udata(c));
+}
+
+static int pm_https_recv_cb(pm_net_tcp_ssl_client_t *c)
+{
+	return pm_http_handle_recv(pm_net_tcp_ssl_client_get_udata(c));
+}
+
 static int pm_http_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c)
 {
-	printf("accept\n");
+	struct pm_http_client *hc = pm_http_alloc_client();
+	if (!c)
+		return -ENOMEM;
+
+	hc->recv_buf = pm_net_tcp_client_get_recv_buf(c);
+	hc->send_buf = pm_net_tcp_client_get_send_buf(c);
+	pm_net_tcp_client_set_udata(c, hc);
+	pm_net_tcp_client_set_recv_cb(c, &pm_http_recv_cb);
 	return 0;
 }
 
 static int pm_https_accept_cb(pm_net_tcp_ssl_ctx_t *ctx, pm_net_tcp_ssl_client_t *c)
 {
-	printf("accept ssl\n");
+	struct pm_http_client *hc = pm_http_alloc_client();
+	if (!hc)
+		return -ENOMEM;
+
+	hc->recv_buf = pm_net_tcp_ssl_client_get_recv_buf(c);
+	hc->send_buf = pm_net_tcp_ssl_client_get_send_buf(c);
+	pm_net_tcp_ssl_client_set_udata(c, hc);
+	pm_net_tcp_ssl_client_set_recv_cb(c, &pm_https_recv_cb);
 	return 0;
 }
 
