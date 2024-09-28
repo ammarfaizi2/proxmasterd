@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
-#include <proxmasterd/net_ssl.h>
+#include <proxmasterd/net_tcp_ssl.h>
 #include <string.h>
 
-static void set_arg(struct pm_net_ssl_ctx_arg *arg, const char *cert, const char *key)
+static void set_arg(struct pm_net_tcp_ssl_arg *arg, const char *cert, const char *key)
 {
-	struct pm_net_ctx_arg *net_arg = &arg->net_ctx_arg;
+	struct pm_net_tcp_arg *net_arg = &arg->net_arg;
 
 	memset(arg, 0, sizeof(*arg));
 	strncpy(arg->cert_file, cert, sizeof(arg->cert_file) - 1);
@@ -20,17 +20,17 @@ static void set_arg(struct pm_net_ssl_ctx_arg *arg, const char *cert, const char
 
 int main(int argc, char *argv[])
 {
-	struct pm_net_ssl_ctx_arg arg;
-	struct pm_net_ssl_ctx ctx;
+	struct pm_net_tcp_ssl_arg arg;
+	pm_net_tcp_ssl_ctx_t *ctx;
 	int err;
 
 	set_arg(&arg, "./q.pem", "./q.key");
-	err = pm_net_ssl_ctx_init(&ctx, &arg);
+	err = pm_net_tcp_ssl_ctx_init(&ctx, &arg);
 	if (err)
 		return -err;
 
-	pm_net_ssl_ctx_run(&ctx);
-	pm_net_ssl_ctx_wait(&ctx);
-	pm_net_ssl_ctx_destroy(&ctx);
+	pm_net_tcp_ssl_ctx_run(ctx);
+	pm_net_tcp_ssl_ctx_wait(ctx);
+	pm_net_tcp_ssl_ctx_destroy(ctx);
 	return 0;
 }

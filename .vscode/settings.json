@@ -2,6 +2,7 @@
 	"files.associations": {
 		"random": "c",
 		"string.h": "c",
-		"net.h": "c"
+		"net.h": "c",
+		"bio.h": "c"
 	}
 }
