@@ -9,14 +9,13 @@
 
 
 struct pm_net_tcp_client {
-	int			fd;
-	uint32_t		idx;
-	uint32_t		ep_mask;
-	struct pm_buf		recv_buf;
-	struct pm_buf		send_buf;
-	struct sockaddr_in46	src_addr;
-
-	void *udata;
+	int				fd;
+	uint32_t			idx;
+	uint32_t			ep_mask;
+	struct pm_buf			recv_buf;
+	struct pm_buf			send_buf;
+	struct sockaddr_in46		src_addr;
+	void				*udata;
 	pm_net_tcp_recv_cb_t		recv_cb;
 	pm_net_tcp_send_cb_t		send_cb;
 	pm_net_tcp_close_cb_t		close_cb;
@@ -39,17 +38,17 @@ struct pm_net_tcp_wrk {
 };
 
 struct pm_net_tcp_ctx {
-	volatile bool		should_stop;
-	volatile bool		started;
-	volatile bool		accept_stopped;
-	int			tcp_fd;
+	volatile bool			should_stop;
+	volatile bool			started;
+	volatile bool			accept_stopped;
+	int				tcp_fd;
 	pm_net_tcp_accept_cb_t		accept_cb;
-	void			*ctx_udata;
-	struct pm_net_tcp_wrk	*workers;
-	struct pm_net_tcp_arg	arg;
-	pthread_mutex_t		accept_lock;
-	pthread_mutex_t		start_lock;
-	pthread_cond_t		start_cond;
+	void				*ctx_udata;
+	struct pm_net_tcp_wrk		*workers;
+	struct pm_net_tcp_arg		arg;
+	pthread_mutex_t			accept_lock;
+	pthread_mutex_t			start_lock;
+	pthread_cond_t			start_cond;
 };
 
 enum {
