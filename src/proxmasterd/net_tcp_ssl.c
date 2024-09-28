@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-
 struct pm_net_tcp_ssl_ctx {
 	SSL_CTX				*ssl_ctx;
 	struct pm_net_tcp_ctx		*net_ctx;
