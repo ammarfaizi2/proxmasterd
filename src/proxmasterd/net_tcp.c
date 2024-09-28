@@ -17,9 +17,9 @@ struct pm_net_tcp_client {
 	struct sockaddr_in46	src_addr;
 
 	void *udata;
-	recv_cb_t		recv_cb;
-	send_cb_t		send_cb;
-	close_cb_t		close_cb;
+	pm_net_tcp_recv_cb_t		recv_cb;
+	pm_net_tcp_send_cb_t		send_cb;
+	pm_net_tcp_close_cb_t		close_cb;
 };
 
 struct pm_net_tcp_wrk {
@@ -43,7 +43,7 @@ struct pm_net_tcp_ctx {
 	volatile bool		started;
 	volatile bool		accept_stopped;
 	int			tcp_fd;
-	accept_cb_t		accept_cb;
+	pm_net_tcp_accept_cb_t		accept_cb;
 	void			*ctx_udata;
 	struct pm_net_tcp_wrk	*workers;
 	struct pm_net_tcp_arg	arg;
@@ -723,6 +723,12 @@ static int handle_event_client_send(struct pm_net_tcp_wrk *w,
 	size_t len;
 	int err;
 
+	if (c->send_cb) {
+		err = c->send_cb(c);
+		if (err == -EAGAIN)
+			err = 0;
+	}
+
 	len = b->len;
 	if (!len)
 		return 0;
@@ -732,8 +738,6 @@ static int handle_event_client_send(struct pm_net_tcp_wrk *w,
 	if (ret > 0) {
 		memmove(b->buf, b->buf + ret, len - ret);
 		b->len -= (size_t)ret;
-		if (c->send_cb)
-			err = c->send_cb(c);
 	} else if (ret == 0) {
 		err = -ECONNRESET;
 	} else {
@@ -788,7 +792,7 @@ static int handle_event_client_recv(struct pm_net_tcp_wrk *w,
 	if (err == -EAGAIN || err == -EINTR)
 		err = 0;
 
-	if (!err && c->send_buf.len)
+	if (!err)
 		err = handle_event_client_send(w, c);
 
 	return err;
@@ -1074,7 +1078,7 @@ void *pm_net_tcp_ctx_get_udata(pm_net_tcp_ctx_t *ctx)
 	return ctx->ctx_udata;
 }
 
-void pm_net_tcp_ctx_set_accept_cb(pm_net_tcp_ctx_t *ctx, accept_cb_t accept_cb)
+void pm_net_tcp_ctx_set_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_accept_cb_t accept_cb)
 {
 	ctx->accept_cb = accept_cb;
 }
@@ -1089,17 +1093,17 @@ void *pm_net_tcp_client_get_udata(pm_net_tcp_client_t *c)
 	return c->udata;
 }
 
-void pm_net_tcp_client_set_recv_cb(pm_net_tcp_client_t *c, recv_cb_t recv_cb)
+void pm_net_tcp_client_set_recv_cb(pm_net_tcp_client_t *c, pm_net_tcp_recv_cb_t recv_cb)
 {
 	c->recv_cb = recv_cb;
 }
 
-void pm_net_tcp_client_set_send_cb(pm_net_tcp_client_t *c, send_cb_t send_cb)
+void pm_net_tcp_client_set_send_cb(pm_net_tcp_client_t *c, pm_net_tcp_send_cb_t send_cb)
 {
 	c->send_cb = send_cb;	
 }
 
-void pm_net_tcp_client_set_close_cb(pm_net_tcp_client_t *c, close_cb_t close_cb)
+void pm_net_tcp_client_set_close_cb(pm_net_tcp_client_t *c, pm_net_tcp_close_cb_t close_cb)
 {
 	c->close_cb = close_cb;
 }
