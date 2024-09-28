@@ -81,4 +81,6 @@ struct pm_buf *pm_net_tcp_client_get_recv_buf(pm_net_tcp_client_t *c);
 struct pm_buf *pm_net_tcp_client_get_send_buf(pm_net_tcp_client_t *c);
 const struct sockaddr_in46 *pm_net_tcp_client_get_src_addr(pm_net_tcp_client_t *c);
 
+void pm_net_tcp_client_user_close(pm_net_tcp_client_t *c);
+
 #endif /* #ifndef PROXMASTERD__NET_H */
