@@ -10,11 +10,12 @@ CFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
 CXXFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
 LDFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION)
 DEPFLAGS = -MT "$@" -MMD -MP -MF $(@:.o=.d)
-LIBS = -lpthread
+LIBS = -lpthread -lssl -lcrypto
 TARGET = proxmasterd
 
 C_SOURCES = \
 	src/proxmasterd/entry.c \
+	src/proxmasterd/net_ssl.c \
 	src/proxmasterd/net.c
 
 CXX_SOURCES =
