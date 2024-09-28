@@ -496,6 +496,9 @@ static int get_client_slot(struct pm_net_wrk *w, struct pm_net_client **cp)
 	assert(c->fd < 0);
 	assert(!c->recv_buf.len);
 	assert(!c->send_buf.len);
+	assert(!c->recv_cb);
+	assert(!c->send_cb);
+	assert(!c->close_cb);
 	*cp = c;
 	atomic_fetch_add(&w->nr_online_conn, 1u);
 	return ret;
@@ -506,6 +509,10 @@ static int __put_client_slot(struct pm_net_wrk *w, struct pm_net_client *c, bool
 	int ret;
 
 	pthread_mutex_lock(&w->stack.lock);
+
+	if (c->close_cb)
+		c->close_cb(c);
+
 	if (c->fd >= 0) {
 		if (del_epoll) {
 			ret = epoll_del(w->ep_fd, c->fd);
@@ -520,8 +527,11 @@ static int __put_client_slot(struct pm_net_wrk *w, struct pm_net_client *c, bool
 	if (c->send_buf.cap > INIT_BUF_SIZE)
 		pm_buf_resize(&c->send_buf, INIT_BUF_SIZE);
 
+	c->recv_buf.len = 0;
+	c->send_buf.len = 0;
 	c->recv_cb = NULL;
 	c->send_cb = NULL;
+	c->close_cb = NULL;
 	ret = __pm_stack_u32_push(&w->stack, w->idx);
 	assert(!ret);
 	pthread_mutex_unlock(&w->stack.lock);
@@ -605,6 +615,14 @@ static int give_client_fd_to_a_worker(struct pm_net_ctx *ctx, int fd,
 	if (r) {
 		put_client_slot_no_epoll(w, c);
 		return r;
+	}
+
+	if (ctx->accept_cb) {
+		r = ctx->accept_cb(ctx, c);
+		if (r) {
+			put_client_slot(w, c);
+			return r;
+		}
 	}
 
 	return 0;
@@ -727,7 +745,7 @@ static int handle_event_client_recv(struct pm_net_wrk *w,
 	if (err == -EAGAIN || err == -EINTR)
 		err = 0;
 
-	if (!err && b->len)
+	if (!err && c->send_buf.len)
 		err = handle_event_client_send(w, c);
 
 	return err;
