@@ -44,6 +44,20 @@ struct pm_http_easy_arg {
 	const char	*key_file;
 };
 
+struct pm_http_hdr_pair {
+	char		*key;
+	char		*val;
+	uint16_t	key_len;
+	uint16_t	val_len;
+};
+
+struct pm_http_hdr {
+	size_t				nr_pairs;
+	struct pm_http_hdr_pair		*pairs;
+};
+
+int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val);
+
 int pm_http_ctx_init(pm_http_ctx_t **ctx_p);
 int pm_http_ctx_add_net_ctx(pm_http_ctx_t *ctx, pm_http_net_ctx_t *net_ctx, uint8_t type);
 int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *arg);
