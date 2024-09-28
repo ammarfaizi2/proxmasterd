@@ -17,6 +17,7 @@ struct pm_net_tcp_ssl_client {
 	BIO				*rbio;
 	BIO				*wbio;
 	struct pm_net_tcp_ssl_ctx	*ssl_ctx;
+	pm_net_tcp_client_t		*net_client;
 	void				*udata;
 	struct pm_buf			recv_buf;
 	struct pm_buf			send_buf;
@@ -256,6 +257,7 @@ static int pm_net_ssl_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c)
 	SSL_set_bio(ssl_c->ssl, ssl_c->rbio, ssl_c->wbio);
 	SSL_set_accept_state(ssl_c->ssl);
 
+	ssl_c->net_client = c;
 	pm_net_tcp_client_set_udata(c, ssl_c);
 	pm_net_tcp_client_set_recv_cb(c, &pm_net_tcp_ssl_client_recv_cb);
 	pm_net_tcp_client_set_send_cb(c, &pm_net_tcp_ssl_client_send_cb);
@@ -393,4 +395,19 @@ void pm_net_tcp_ssl_client_set_send_cb(pm_net_tcp_ssl_client_t *c, pm_net_tcp_ss
 void pm_net_tcp_ssl_client_set_close_cb(pm_net_tcp_ssl_client_t *c, pm_net_tcp_ssl_close_cb_t close_cb)
 {
 	c->close_cb = close_cb;
+}
+
+struct pm_buf *pm_net_tcp_ssl_client_get_recv_buf(pm_net_tcp_ssl_client_t *c)
+{
+	return &c->recv_buf;
+}
+
+struct pm_buf *pm_net_tcp_ssl_client_get_send_buf(pm_net_tcp_ssl_client_t *c)
+{
+	return &c->send_buf;
+}
+
+const struct sockaddr_in46 *pm_net_tcp_ssl_client_get_src_addr(pm_net_tcp_ssl_client_t *c)
+{
+	return pm_net_tcp_client_get_src_addr(c->net_client);
 }
