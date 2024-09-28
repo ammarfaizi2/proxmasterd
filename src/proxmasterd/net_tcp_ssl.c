@@ -414,3 +414,8 @@ const struct sockaddr_in46 *pm_net_tcp_ssl_client_get_src_addr(pm_net_tcp_ssl_cl
 {
 	return pm_net_tcp_client_get_src_addr(c->net_client);
 }
+
+void pm_net_tcp_ssl_client_user_close(pm_net_tcp_ssl_client_t *c)
+{
+	pm_net_tcp_client_user_close(c->net_client);
+}
