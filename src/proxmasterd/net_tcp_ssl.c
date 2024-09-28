@@ -10,6 +10,7 @@ struct pm_net_tcp_ssl_ctx {
 	struct pm_net_tcp_ctx		*net_ctx;
 	struct pm_net_tcp_ssl_arg	arg;
 	pm_net_tcp_ssl_accept_cb_t	accept_cb;
+	void				*udata;
 };
 
 struct pm_net_tcp_ssl_client {
@@ -17,6 +18,7 @@ struct pm_net_tcp_ssl_client {
 	BIO				*rbio;
 	BIO				*wbio;
 	struct pm_net_tcp_ssl_ctx	*ssl_ctx;
+	void				*udata;
 	struct pm_buf			recv_buf;
 	struct pm_buf			send_buf;
 	pm_net_tcp_ssl_recv_cb_t	recv_cb;
@@ -351,4 +353,44 @@ void pm_net_tcp_ssl_ctx_destroy(pm_net_tcp_ssl_ctx_t *ctx)
 	pm_net_tcp_ctx_destroy(ctx->net_ctx);
 	SSL_CTX_free(ctx->ssl_ctx);
 	free(ctx);
+}
+
+void pm_net_tcp_ssl_ctx_set_udata(pm_net_tcp_ssl_ctx_t *ctx, void *udata)
+{
+	ctx->udata = udata;
+}
+
+void *pm_net_tcp_ssl_ctx_get_udata(pm_net_tcp_ssl_ctx_t *ctx)
+{
+	return ctx->udata;
+}
+
+void pm_net_tcp_ssl_ctx_set_accept_cb(pm_net_tcp_ssl_ctx_t *ctx, pm_net_tcp_ssl_accept_cb_t accept_cb)
+{
+	ctx->accept_cb = accept_cb;
+}
+
+void pm_net_tcp_ssl_client_set_udata(pm_net_tcp_ssl_client_t *c, void *udata)
+{
+	c->udata = udata;
+}
+
+void *pm_net_tcp_ssl_client_get_udata(pm_net_tcp_ssl_client_t *c)
+{
+	return c->udata;
+}
+
+void pm_net_tcp_ssl_client_set_recv_cb(pm_net_tcp_ssl_client_t *c, pm_net_tcp_ssl_recv_cb_t recv_cb)
+{
+	c->recv_cb = recv_cb;
+}
+
+void pm_net_tcp_ssl_client_set_send_cb(pm_net_tcp_ssl_client_t *c, pm_net_tcp_ssl_send_cb_t send_cb)
+{
+	c->send_cb = send_cb;
+}
+
+void pm_net_tcp_ssl_client_set_close_cb(pm_net_tcp_ssl_client_t *c, pm_net_tcp_ssl_close_cb_t close_cb)
+{
+	c->close_cb = close_cb;
 }
