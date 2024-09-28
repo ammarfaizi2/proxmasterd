@@ -14,9 +14,56 @@ struct pm_http_ctx {
 
 struct pm_http_client {
 	uint8_t				method;
+	struct pm_http_hdr		hdr;
 	struct pm_buf			*recv_buf;
 	struct pm_buf			*send_buf;
 };
+
+int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val)
+{
+	struct pm_http_hdr_pair *pair;
+	size_t new_nr_pairs;
+
+	new_nr_pairs = hdr->nr_pairs + 1;
+	pair = realloc(hdr->pairs, new_nr_pairs * sizeof(*pair));
+	if (!pair)
+		return -ENOMEM;
+
+	hdr->pairs = pair;
+	pair = &hdr->pairs[hdr->nr_pairs];
+	pair->key = strdup(key);
+	if (!pair->key)
+		return -ENOMEM;
+
+	pair->val = strdup(val);
+	if (!pair->val) {
+		free(pair->key);
+		return -ENOMEM;
+	}
+
+	pair->key_len = strlen(key);
+	pair->val_len = strlen(val);
+	hdr->nr_pairs = new_nr_pairs;
+	return 0;
+}
+
+static void pm_http_hdr_destroy(struct pm_http_hdr *hdr)
+{
+	size_t i;
+
+	if (!hdr->nr_pairs)
+		return;
+
+	for (i = 0; i < hdr->nr_pairs; i++) {
+		struct pm_http_hdr_pair *pair = &hdr->pairs[i];
+
+		free(pair->key);
+		free(pair->val);
+	}
+
+	free(hdr->pairs);
+	memset(hdr, 0, sizeof(*hdr));
+}
 
 int pm_http_ctx_init(pm_http_ctx_t **ctx_p)
 {
@@ -207,13 +254,7 @@ void pm_http_ctx_destroy(pm_http_ctx_t *ctx_p)
 
 static struct pm_http_client *pm_http_alloc_client(void)
 {
-	struct pm_http_client *c;
-
-	c = calloc(1, sizeof(*c));
-	if (!c)
-		return NULL;
-
-	return c;
+	return calloc(1, sizeof(struct pm_http_client));
 }
 
 static const char http_res[] = "HTTP/1.1 200 OK\r\n"
@@ -224,7 +265,7 @@ static const char http_res[] = "HTTP/1.1 200 OK\r\n"
 
 static int pm_http_handle_recv(struct pm_http_client *hc)
 {
-	struct pm_buf *recv_buf = hc->recv_buf;
+	// struct pm_buf *recv_buf = hc->recv_buf;
 	struct pm_buf *send_buf = hc->send_buf;
 
 	memcpy(send_buf->buf, http_res, sizeof(http_res));
@@ -232,9 +273,26 @@ static int pm_http_handle_recv(struct pm_http_client *hc)
 	return 0;
 }
 
+static int pm_http_handle_close(struct pm_http_client *hc)
+{
+	pm_http_hdr_destroy(&hc->hdr);
+	free(hc);
+	return 0;
+}
+
+static int pm_http_close_cb(pm_net_tcp_client_t *c)
+{
+	return pm_http_handle_close(pm_net_tcp_client_get_udata(c));
+}
+
 static int pm_http_recv_cb(pm_net_tcp_client_t *c)
 {
 	return pm_http_handle_recv(pm_net_tcp_client_get_udata(c));
+}
+
+static int pm_https_close_cb(pm_net_tcp_ssl_client_t *c)
+{
+	return pm_http_handle_close(pm_net_tcp_ssl_client_get_udata(c));
 }
 
 static int pm_https_recv_cb(pm_net_tcp_ssl_client_t *c)
@@ -252,6 +310,8 @@ static int pm_http_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c)
 	hc->send_buf = pm_net_tcp_client_get_send_buf(c);
 	pm_net_tcp_client_set_udata(c, hc);
 	pm_net_tcp_client_set_recv_cb(c, &pm_http_recv_cb);
+	pm_net_tcp_client_set_close_cb(c, &pm_http_close_cb);
+	(void)ctx;
 	return 0;
 }
 
@@ -265,6 +325,8 @@ static int pm_https_accept_cb(pm_net_tcp_ssl_ctx_t *ctx, pm_net_tcp_ssl_client_t
 	hc->send_buf = pm_net_tcp_ssl_client_get_send_buf(c);
 	pm_net_tcp_ssl_client_set_udata(c, hc);
 	pm_net_tcp_ssl_client_set_recv_cb(c, &pm_https_recv_cb);
+	pm_net_tcp_ssl_client_set_close_cb(c, &pm_https_close_cb);
+	(void)ctx;
 	return 0;
 }
 

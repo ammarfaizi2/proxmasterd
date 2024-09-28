@@ -224,6 +224,9 @@ static int pm_net_tcp_ssl_client_close_cb(pm_net_tcp_client_t *c)
 {
 	pm_net_tcp_ssl_client_t *ssl_c = pm_net_tcp_client_get_udata(c);
 
+	if (ssl_c->close_cb)
+		ssl_c->close_cb(ssl_c);
+
 	pm_buf_destroy(&ssl_c->recv_buf);
 	pm_buf_destroy(&ssl_c->send_buf);
 	SSL_free(ssl_c->ssl);
