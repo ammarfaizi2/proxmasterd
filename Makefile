@@ -1,9 +1,14 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
-CC = gcc
-CXX = g++
-LD = g++
-OPTIMIZATION = -O2
+# CC = gcc
+# CXX = g++
+# LD = g++
+
+CC = clang
+CXX = clang++
+LD = clang++
+
+OPTIMIZATION = -O2 -flto
 INCLUDE_FLAGS = -I./src
 DEFFLAGS = -D_GNU_SOURCE
 CFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
@@ -15,6 +20,7 @@ TARGET = proxmasterd
 
 C_SOURCES = \
 	src/proxmasterd/entry.c \
+	src/proxmasterd/http.c \
 	src/proxmasterd/net_tcp_ssl.c \
 	src/proxmasterd/net_tcp.c
 
