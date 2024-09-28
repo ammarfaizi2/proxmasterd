@@ -37,8 +37,10 @@ struct pm_net_client {
 	struct pm_buf		send_buf;
 	struct sockaddr_in46	src_addr;
 
+	void *udata;
 	int (*recv_cb)(struct pm_net_client *c, ssize_t recv_ret);
 	int (*send_cb)(struct pm_net_client *c, ssize_t send_ret);
+	int (*close_cb)(struct pm_net_client *c);
 };
 
 struct pm_stack_u32 {
@@ -83,6 +85,9 @@ struct pm_net_ctx {
 	int			tcp_fd;
 	struct pm_net_wrk	*workers;
 	struct pm_net_ctx_arg	arg;
+
+	void *udata;
+	int (*accept_cb)(struct pm_net_ctx *ctx, struct pm_net_client *c);
 };
 
 int __pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v);
@@ -100,5 +105,61 @@ void pm_net_ctx_run(struct pm_net_ctx *ctx);
 void pm_net_ctx_wait(struct pm_net_ctx *ctx);
 void pm_net_ctx_stop(struct pm_net_ctx *ctx);
 void pm_net_ctx_destroy(struct pm_net_ctx *ctx);
+
+static inline
+void pm_net_ctx_set_accept_cb(struct pm_net_ctx *ctx, int (*accept_cb)(struct pm_net_ctx *ctx, struct pm_net_client *c))
+{
+	ctx->accept_cb = accept_cb;
+}
+
+static inline
+void *pm_net_ctx_set_udata(struct pm_net_ctx *ctx, void *udata)
+{
+	void *old_udata;
+
+	old_udata = ctx->udata;
+	ctx->udata = udata;
+	return old_udata;
+}
+
+static inline
+void *pm_net_ctx_get_udata(struct pm_net_ctx *ctx)
+{
+	return ctx->udata;
+}
+
+static inline
+void *pm_net_client_set_udata(struct pm_net_client *c, void *udata)
+{
+	void *old_udata;
+
+	old_udata = c->udata;
+	c->udata = udata;
+	return old_udata;
+}
+
+static inline
+void *pm_net_client_get_udata(struct pm_net_client *c)
+{
+	return c->udata;
+}
+
+static inline
+void pm_net_client_set_recv_cb(struct pm_net_client *c, int (*recv_cb)(struct pm_net_client *c, ssize_t recv_ret))
+{
+	c->recv_cb = recv_cb;
+}
+
+static inline
+void pm_net_client_set_send_cb(struct pm_net_client *c, int (*send_cb)(struct pm_net_client *c, ssize_t send_ret))
+{
+	c->send_cb = send_cb;
+}
+
+static inline
+void pm_net_client_set_close_cb(struct pm_net_client *c, int (*close_cb)(struct pm_net_client *c))
+{
+	c->close_cb = close_cb;
+}
 
 #endif /* #ifndef PROXMASTERD__NET_H */

@@ -7,3 +7,5 @@
 *.tmp
 *.out
 /proxmasterd
+/q.pem
+/q.key
