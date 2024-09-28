@@ -10,6 +10,18 @@ enum {
 	PM_HTTP_NET_CTX_SSL	= 1
 };
 
+enum {
+	PM_HTTP_METHOD_GET	= 0,
+	PM_HTTP_METHOD_POST	= 1,
+	PM_HTTP_METHOD_PUT	= 2,
+	PM_HTTP_METHOD_DELETE	= 3,
+	PM_HTTP_METHOD_HEAD	= 4,
+	PM_HTTP_METHOD_OPTIONS	= 5,
+	PM_HTTP_METHOD_TRACE	= 6,
+	PM_HTTP_METHOD_CONNECT	= 7,
+	PM_HTTP_METHOD_PATCH	= 8
+};
+
 struct pm_http_net_ctx;
 struct pm_http_ctx;
 typedef struct pm_http_net_ctx pm_http_net_ctx_t;

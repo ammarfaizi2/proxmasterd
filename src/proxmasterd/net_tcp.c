@@ -760,7 +760,7 @@ static int handle_event_client_send(struct pm_net_tcp_wrk *w,
 
 	return err;
 }
-
+#include <stdio.h>
 static int handle_event_client_recv(struct pm_net_tcp_wrk *w,
 				    struct pm_net_tcp_client *c)
 {
