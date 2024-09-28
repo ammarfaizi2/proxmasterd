@@ -14,9 +14,12 @@ struct pm_http_ctx {
 
 struct pm_http_client {
 	uint8_t				method;
+	bool				use_ssl;
+	bool				keep_alive;
 	struct pm_http_hdr		hdr;
 	struct pm_buf			*recv_buf;
 	struct pm_buf			*send_buf;
+	void				*nclient;
 };
 
 int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val)
@@ -98,7 +101,7 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg.bind_addr.v6.sin6_port = htons(arg->plain_port);
 		parg.bind_addr.v6.sin6_family = AF_INET6;
 
-		parg.client_init_cap = 2048;
+		parg.client_init_cap = 4096;
 		parg.nr_workers = 4;
 		parg.sock_backlog = 2048;
 		ret = pm_net_tcp_ctx_init(&net_ctx.plain, &parg);
@@ -124,7 +127,7 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg->bind_addr.v6.sin6_port = htons(arg->ssl_port);
 		parg->bind_addr.v6.sin6_family = AF_INET6;
 
-		parg->client_init_cap = 2048;
+		parg->client_init_cap = 4096;
 		parg->nr_workers = 4;
 		parg->sock_backlog = 2048;
 
@@ -257,9 +260,18 @@ static struct pm_http_client *pm_http_alloc_client(void)
 	return calloc(1, sizeof(struct pm_http_client));
 }
 
+static void pm_http_client_close(struct pm_http_client *hc)
+{
+	if (hc->use_ssl)
+		pm_net_tcp_ssl_client_user_close(hc->nclient);
+	else
+		pm_net_tcp_client_user_close(hc->nclient);
+}
+
 static const char http_res[] = "HTTP/1.1 200 OK\r\n"
 	"Content-Type: text/plain\r\n"
 	"Content-Length: 13\r\n"
+	"Connection: close\r\n"
 	"\r\n"
 	"Hello World!\n";
 
@@ -270,6 +282,7 @@ static int pm_http_handle_recv(struct pm_http_client *hc)
 
 	memcpy(send_buf->buf, http_res, sizeof(http_res));
 	send_buf->len = sizeof(http_res) - 1;
+	pm_http_client_close(hc);
 	return 0;
 }
 
@@ -308,6 +321,7 @@ static int pm_http_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c)
 
 	hc->recv_buf = pm_net_tcp_client_get_recv_buf(c);
 	hc->send_buf = pm_net_tcp_client_get_send_buf(c);
+	hc->nclient = c;
 	pm_net_tcp_client_set_udata(c, hc);
 	pm_net_tcp_client_set_recv_cb(c, &pm_http_recv_cb);
 	pm_net_tcp_client_set_close_cb(c, &pm_http_close_cb);
@@ -321,8 +335,10 @@ static int pm_https_accept_cb(pm_net_tcp_ssl_ctx_t *ctx, pm_net_tcp_ssl_client_t
 	if (!hc)
 		return -ENOMEM;
 
+	hc->use_ssl = true;
 	hc->recv_buf = pm_net_tcp_ssl_client_get_recv_buf(c);
 	hc->send_buf = pm_net_tcp_ssl_client_get_send_buf(c);
+	hc->nclient = c;
 	pm_net_tcp_ssl_client_set_udata(c, hc);
 	pm_net_tcp_ssl_client_set_recv_cb(c, &pm_https_recv_cb);
 	pm_net_tcp_ssl_client_set_close_cb(c, &pm_https_close_cb);

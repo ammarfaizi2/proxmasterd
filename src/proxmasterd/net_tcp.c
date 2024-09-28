@@ -2,6 +2,7 @@
 
 #include <proxmasterd/net_tcp.h>
 
+#include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +20,7 @@ struct pm_net_tcp_client {
 	pm_net_tcp_recv_cb_t		recv_cb;
 	pm_net_tcp_send_cb_t		send_cb;
 	pm_net_tcp_close_cb_t		close_cb;
+	bool				user_close;
 };
 
 struct pm_net_tcp_wrk {
@@ -546,6 +548,7 @@ static int get_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client **
 	assert(!c->recv_cb);
 	assert(!c->send_cb);
 	assert(!c->close_cb);
+	assert(!c->user_close);
 	*cp = c;
 	atomic_fetch_add(&w->nr_online_conn, 1u);
 	return ret;
@@ -579,7 +582,8 @@ static int __put_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client 
 	c->recv_cb = NULL;
 	c->send_cb = NULL;
 	c->close_cb = NULL;
-	ret = __pm_stack_u32_push(&w->stack, w->idx);
+	c->user_close = false;
+	ret = __pm_stack_u32_push(&w->stack, c->idx);
 	assert(!ret);
 	pthread_mutex_unlock(&w->stack.lock);
 	atomic_fetch_sub(&w->nr_online_conn, 1u);
@@ -722,7 +726,7 @@ static int handle_event_client_send(struct pm_net_tcp_wrk *w,
 	size_t len;
 	int err;
 
-	if (c->send_cb) {
+	if (c->send_cb && !c->user_close) {
 		err = c->send_cb(c);
 		if (err == -EAGAIN)
 			err = 0;
@@ -746,6 +750,9 @@ static int handle_event_client_send(struct pm_net_tcp_wrk *w,
 	if (err == -EAGAIN || err == -EINTR)
 		err = 0;
 
+	if (c->user_close && !b->len)
+		err = -ECONNRESET;
+
 	if (!err) {
 		if (b->len) {
 			if (!(c->ep_mask & EPOLLOUT)) {
@@ -760,7 +767,7 @@ static int handle_event_client_send(struct pm_net_tcp_wrk *w,
 
 	return err;
 }
-#include <stdio.h>
+
 static int handle_event_client_recv(struct pm_net_tcp_wrk *w,
 				    struct pm_net_tcp_client *c)
 {
@@ -1120,4 +1127,9 @@ struct pm_buf *pm_net_tcp_client_get_send_buf(pm_net_tcp_client_t *c)
 const struct sockaddr_in46 *pm_net_tcp_client_get_src_addr(pm_net_tcp_client_t *c)
 {
 	return &c->src_addr;
+}
+
+void pm_net_tcp_client_user_close(pm_net_tcp_client_t *c)
+{
+	c->user_close = true;
 }

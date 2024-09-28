@@ -4,6 +4,7 @@
 		"string.h": "c",
 		"net.h": "c",
 		"bio.h": "c",
-		"in.h": "c"
+		"in.h": "c",
+		"net_tcp.h": "c"
 	}
 }
