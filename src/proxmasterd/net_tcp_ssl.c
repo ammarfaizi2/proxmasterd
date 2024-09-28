@@ -100,8 +100,9 @@ static int pm_net_tcp_ssl_client_do_accept(pm_net_tcp_client_t *c,
 	if (ret != 1)
 		return handle_ssl_error(c, ssl_c, ret);
 
-	if (ssl_c->recv_cb)
-		return ssl_c->recv_cb(ssl_c);
+	ssl_c->has_accepted = true;
+	if (ssl_c->ssl_ctx->accept_cb)
+		ret = ssl_c->ssl_ctx->accept_cb(ssl_c->ssl_ctx, ssl_c);
 
 	return 0;
 }
@@ -133,6 +134,7 @@ static int pm_net_tcp_ssl_do_recv(pm_net_tcp_client_t *c,
 	ssl_rbuf->len += uret;
 	ssl_rbuf->buf[ssl_rbuf->len] = '\0';
 
+	ret = 0;
 	if (ssl_c->recv_cb)
 		ret = ssl_c->recv_cb(ssl_c);
 
@@ -191,9 +193,8 @@ static int pm_net_tcp_ssl_client_recv_cb(pm_net_tcp_client_t *c)
 
 		if (!ssl_c->has_accepted) {
 			ret = pm_net_tcp_ssl_client_do_accept(c, ssl_c);
-			if (!ret)
+			if (ret)
 				return ret;
-			ssl_c->has_accepted = true;
 		}
 
 		ret = pm_net_tcp_ssl_do_recv(c, ssl_c);
