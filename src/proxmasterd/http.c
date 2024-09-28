@@ -3,13 +3,17 @@
 #include <proxmasterd/http.h>
 
 struct pm_http_net_ctx_arr {
-	size_t			nr_ctx;
-	uint8_t			*type_arr;
-	struct pm_http_net_ctx	*ctx_arr;
+	size_t				nr_ctx;
+	uint8_t				*type_arr;
+	struct pm_http_net_ctx		*ctx_arr;
 };
 
 struct pm_http_ctx {
 	struct pm_http_net_ctx_arr	net_ctx_arr;
+};
+
+struct pm_http_client {
+	uint8_t				method;
 };
 
 int pm_http_ctx_init(pm_http_ctx_t **ctx_p)
@@ -123,15 +127,8 @@ int pm_http_ctx_add_net_ctx(pm_http_ctx_t *ctx, pm_http_net_ctx_t *net_ctx, uint
 	return 0;
 }
 
-static void __pm_http_ctx_run(struct pm_http_net_ctx *net_ctx)
-{
-	pm_net_tcp_ctx_run(net_ctx->plain);
-}
-
-static void __pm_http_ctx_run_ssl(struct pm_http_net_ctx *net_ctx)
-{
-	pm_net_tcp_ssl_ctx_run(net_ctx->ssl);
-}
+static void __pm_http_ctx_run(pm_http_ctx_t *ctx, pm_net_tcp_ctx_t *nctx);
+static void __pm_http_ctx_run_ssl(pm_http_ctx_t *ctx, pm_net_tcp_ssl_ctx_t *nctx);
 
 void pm_http_ctx_run(pm_http_ctx_t *ctx)
 {
@@ -144,9 +141,9 @@ void pm_http_ctx_run(pm_http_ctx_t *ctx)
 		uint8_t type = net_ctx_arr->type_arr[i];
 
 		if (type == PM_HTTP_NET_CTX_PLAIN)
-			__pm_http_ctx_run(net_ctx);
+			__pm_http_ctx_run(ctx, net_ctx->plain);
 		else
-			__pm_http_ctx_run_ssl(net_ctx);
+			__pm_http_ctx_run_ssl(ctx, net_ctx->ssl);
 	}
 }
 
@@ -204,4 +201,30 @@ void pm_http_ctx_destroy(pm_http_ctx_t *ctx_p)
 	free(net_ctx_arr->type_arr);
 	free(ctx_p);
 	memset(ctx_p, 0, sizeof(*ctx_p));
+}
+
+static int pm_http_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c)
+{
+	printf("accept\n");
+	return 0;
+}
+
+static int pm_https_accept_cb(pm_net_tcp_ssl_ctx_t *ctx, pm_net_tcp_ssl_client_t *c)
+{
+	printf("accept ssl\n");
+	return 0;
+}
+
+static void __pm_http_ctx_run(pm_http_ctx_t *ctx, pm_net_tcp_ctx_t *nctx)
+{
+	pm_net_tcp_ctx_set_udata(nctx, ctx);
+	pm_net_tcp_ctx_set_accept_cb(nctx, &pm_http_accept_cb);
+	pm_net_tcp_ctx_run(nctx);
+}
+
+static void __pm_http_ctx_run_ssl(pm_http_ctx_t *ctx, pm_net_tcp_ssl_ctx_t *nctx)
+{
+	pm_net_tcp_ssl_ctx_set_udata(nctx, ctx);
+	pm_net_tcp_ssl_ctx_set_accept_cb(nctx, &pm_https_accept_cb);
+	pm_net_tcp_ssl_ctx_run(nctx);
 }
