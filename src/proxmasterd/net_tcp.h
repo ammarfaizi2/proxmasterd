@@ -32,10 +32,10 @@ struct pm_buf {
 struct pm_net_tcp_ctx;
 typedef struct pm_net_tcp_ctx pm_net_tcp_ctx_t;
 typedef struct pm_net_tcp_client pm_net_tcp_client_t;
-typedef int (*recv_cb_t)(pm_net_tcp_client_t *c);
-typedef int (*send_cb_t)(pm_net_tcp_client_t *c);
-typedef int (*close_cb_t)(pm_net_tcp_client_t *c);
-typedef int (*accept_cb_t)(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c);
+typedef int (*pm_net_tcp_recv_cb_t)(pm_net_tcp_client_t *c);
+typedef int (*pm_net_tcp_send_cb_t)(pm_net_tcp_client_t *c);
+typedef int (*pm_net_tcp_close_cb_t)(pm_net_tcp_client_t *c);
+typedef int (*pm_net_tcp_accept_cb_t)(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c);
 
 struct pm_stack_u32 {
 	size_t		bp;
@@ -69,14 +69,13 @@ void pm_net_tcp_ctx_destroy(pm_net_tcp_ctx_t *ctx);
 
 void pm_net_tcp_ctx_set_udata(pm_net_tcp_ctx_t *ctx, void *udata);
 void *pm_net_tcp_ctx_get_udata(pm_net_tcp_ctx_t *ctx);
-void pm_net_tcp_ctx_set_accept_cb(pm_net_tcp_ctx_t *ctx, accept_cb_t accept_cb);
-
+void pm_net_tcp_ctx_set_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_accept_cb_t accept_cb);
 
 void pm_net_tcp_client_set_udata(pm_net_tcp_client_t *c, void *udata);
 void *pm_net_tcp_client_get_udata(pm_net_tcp_client_t *c);
-void pm_net_tcp_client_set_recv_cb(pm_net_tcp_client_t *c, recv_cb_t recv_cb);
-void pm_net_tcp_client_set_send_cb(pm_net_tcp_client_t *c, send_cb_t send_cb);
-void pm_net_tcp_client_set_close_cb(pm_net_tcp_client_t *c, close_cb_t close_cb);
+void pm_net_tcp_client_set_recv_cb(pm_net_tcp_client_t *c, pm_net_tcp_recv_cb_t recv_cb);
+void pm_net_tcp_client_set_send_cb(pm_net_tcp_client_t *c, pm_net_tcp_send_cb_t send_cb);
+void pm_net_tcp_client_set_close_cb(pm_net_tcp_client_t *c, pm_net_tcp_close_cb_t close_cb);
 
 struct pm_buf *pm_net_tcp_client_get_recv_buf(pm_net_tcp_client_t *c);
 struct pm_buf *pm_net_tcp_client_get_send_buf(pm_net_tcp_client_t *c);
