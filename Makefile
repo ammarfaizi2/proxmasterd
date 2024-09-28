@@ -15,8 +15,8 @@ TARGET = proxmasterd
 
 C_SOURCES = \
 	src/proxmasterd/entry.c \
-	src/proxmasterd/net_ssl.c \
-	src/proxmasterd/net.c
+	src/proxmasterd/net_tcp_ssl.c \
+	src/proxmasterd/net_tcp.c
 
 CXX_SOURCES =
 
