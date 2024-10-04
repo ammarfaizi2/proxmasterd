@@ -101,8 +101,8 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg.bind_addr.v6.sin6_port = htons(arg->plain_port);
 		parg.bind_addr.v6.sin6_family = AF_INET6;
 
-		parg.client_init_cap = 4096;
-		parg.nr_workers = 4;
+		parg.client_init_cap = 8192;
+		parg.nr_workers = 2;
 		parg.sock_backlog = 2048;
 		ret = pm_net_tcp_ctx_init(&net_ctx.plain, &parg);
 		if (ret) {
@@ -127,8 +127,8 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg->bind_addr.v6.sin6_port = htons(arg->ssl_port);
 		parg->bind_addr.v6.sin6_family = AF_INET6;
 
-		parg->client_init_cap = 4096;
-		parg->nr_workers = 4;
+		parg->client_init_cap = 8192;
+		parg->nr_workers = 2;
 		parg->sock_backlog = 2048;
 
 		strncpy(sarg.cert_file, arg->cert_file, sizeof(sarg.cert_file) - 1);
@@ -268,10 +268,10 @@ static void pm_http_client_close(struct pm_http_client *hc)
 		pm_net_tcp_client_user_close(hc->nclient);
 }
 
-static const char http_res[] = "HTTP/1.1 200 OK\r\n"
+static const char http_res[] = "HTTP/1.0 200 OK\r\n"
 	"Content-Type: text/plain\r\n"
 	"Content-Length: 13\r\n"
-	"Connection: close\r\n"
+	"Connection: keep-alive\r\n"
 	"\r\n"
 	"Hello World!\n";
 
@@ -282,7 +282,6 @@ static int pm_http_handle_recv(struct pm_http_client *hc)
 
 	memcpy(send_buf->buf, http_res, sizeof(http_res));
 	send_buf->len = sizeof(http_res) - 1;
-	pm_http_client_close(hc);
 	return 0;
 }
 
