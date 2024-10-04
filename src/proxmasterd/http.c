@@ -12,11 +12,14 @@ struct pm_http_net_ctx_arr {
 
 struct pm_http_ctx {
 	struct pm_http_net_ctx_arr	net_ctx_arr;
+	pm_http_req_cb_t		req_cb;
+	void				*req_cb_arg;
 };
 
 struct pm_http_client {
 	bool				use_ssl;
 	bool				keep_alive;
+	struct pm_http_ctx		*ctx;
 	struct pm_buf			*recv_buf;
 	struct pm_buf			*send_buf;
 	void				*nclient;
@@ -24,6 +27,12 @@ struct pm_http_client {
 	struct pm_http_res		*res;
 	uint32_t			nr_reqs;
 };
+
+void pm_http_ctx_set_req_cb(pm_http_ctx_t *ctx, pm_http_req_cb_t cb, void *arg)
+{
+	ctx->req_cb = cb;
+	ctx->req_cb_arg = arg;
+}
 
 static int pm_http_str_append(struct pm_http_str *str, const char *s, size_t len)
 {
@@ -637,28 +646,16 @@ static int collect_requests(struct pm_http_client *hc)
 
 static int handle_requests(struct pm_http_client *hc)
 {
+	pm_http_ctx_t *ctx = hc->ctx;
 	size_t i;
 
 	for (i = 0; i < hc->nr_reqs; i++) {
 		struct pm_http_req *req = &hc->req[i];
 		struct pm_http_res *res = &hc->res[i];
-		int ret;
 
-		if (req->method == PM_HTTP_METHOD_GET) {
-			ret = pm_http_hdr_add(&res->hdr, "Content-Type", "text/plain");
-			if (ret)
-				return ret;
-
-			ret = pm_buf_append(&res->body, "Hello world!\n", 13);
-			if (ret)
-				return ret;
-
-			res->status_code = 200;
-		} else {
-			res->status_code = 405;
-		}
-
-		res->ver = req->ver;
+		res->status_code = 200;
+		if (ctx->req_cb)
+			ctx->req_cb(req, res, ctx->req_cb_arg);
 	}
 
 	return 0;
@@ -669,6 +666,8 @@ static const char *translate_http_code(uint16_t code)
 	switch (code) {
 	case 200:
 		return "OK";
+	case 204:
+		return "No Content";
 	case 400:
 		return "Bad Request";
 	case 404:
@@ -835,10 +834,12 @@ static int pm_https_recv_cb(pm_net_tcp_ssl_client_t *c)
 
 static int pm_http_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c)
 {
+	pm_http_ctx_t *hctx = pm_net_tcp_ctx_get_udata(ctx);
 	struct pm_http_client *hc = pm_http_alloc_client();
 	if (!c)
 		return -ENOMEM;
 
+	hc->ctx = hctx;
 	hc->recv_buf = pm_net_tcp_client_get_recv_buf(c);
 	hc->send_buf = pm_net_tcp_client_get_send_buf(c);
 	hc->nclient = c;
@@ -851,10 +852,12 @@ static int pm_http_accept_cb(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c)
 
 static int pm_https_accept_cb(pm_net_tcp_ssl_ctx_t *ctx, pm_net_tcp_ssl_client_t *c)
 {
+	pm_http_ctx_t *hctx = pm_net_tcp_ssl_ctx_get_udata(ctx);
 	struct pm_http_client *hc = pm_http_alloc_client();
 	if (!hc)
 		return -ENOMEM;
 
+	hc->ctx = hctx;
 	hc->use_ssl = true;
 	hc->recv_buf = pm_net_tcp_ssl_client_get_recv_buf(c);
 	hc->send_buf = pm_net_tcp_ssl_client_get_send_buf(c);

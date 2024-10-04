@@ -88,12 +88,15 @@ struct pm_http_res {
 	struct pm_buf		body;
 };
 
+typedef void (*pm_http_req_cb_t)(struct pm_http_req *req, struct pm_http_res *res, void *arg);
+
 int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val);
 int pm_http_hdr_get(struct pm_http_hdr *hdr, const char *key, char **val);
 
 int pm_http_ctx_init(pm_http_ctx_t **ctx_p);
 int pm_http_ctx_add_net_ctx(pm_http_ctx_t *ctx, pm_http_net_ctx_t *net_ctx, uint8_t type);
 int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *arg);
+void pm_http_ctx_set_req_cb(pm_http_ctx_t *ctx, pm_http_req_cb_t cb, void *arg);
 
 void pm_http_ctx_run(pm_http_ctx_t *ctx);
 void pm_http_ctx_wait(pm_http_ctx_t *ctx);
