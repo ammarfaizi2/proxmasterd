@@ -27,9 +27,34 @@ struct pm_net_tcp_ssl_client {
 	bool				has_accepted;
 };
 
-static int do_bio_read(pm_net_tcp_client_t *c, struct pm_net_tcp_ssl_client *ssl_c)
+static int do_bio_write(struct pm_net_tcp_ssl_client *ssl_c, struct pm_buf *rbuf)
 {
-	struct pm_buf *tcp_sbuf = pm_net_tcp_client_get_send_buf(c);
+	size_t uret;
+	int ret;
+
+	if (rbuf->len == 0)
+		return -EAGAIN;
+
+	ret = BIO_write(ssl_c->rbio, rbuf->buf, rbuf->len);
+	if (ret <= 0)
+		return -EIO;
+
+	uret = (size_t)ret;
+	if (uret > rbuf->len)
+		return -EINVAL;
+
+	if (uret < rbuf->len) {
+		memmove(rbuf->buf, rbuf->buf + uret, rbuf->len - uret);
+		rbuf->len -= uret;
+	} else {
+		rbuf->len = 0;
+	}
+
+	return 0;
+}
+
+static int do_bio_read(struct pm_net_tcp_ssl_client *ssl_c, struct pm_buf *sbuf)
+{
 	size_t len;
 	char *buf;
 	int ret;
@@ -37,79 +62,37 @@ static int do_bio_read(pm_net_tcp_client_t *c, struct pm_net_tcp_ssl_client *ssl
 	if (BIO_ctrl_pending(ssl_c->wbio) == 0)
 		return -EAGAIN;
 
-	len = tcp_sbuf->cap - tcp_sbuf->len;
+	len = sbuf->cap - sbuf->len;
 	if (!len) {
-		if (pm_buf_resize(tcp_sbuf, (tcp_sbuf->cap + 1) * 2))
+		if (pm_buf_resize(sbuf, (sbuf->cap + 1) * 2))
 			return -ENOMEM;
-		len = tcp_sbuf->cap - tcp_sbuf->len;
+		len = sbuf->cap - sbuf->len;
 	}
 
-	buf = tcp_sbuf->buf + tcp_sbuf->len;
+	buf = sbuf->buf + sbuf->len;
 	ret = BIO_read(ssl_c->wbio, buf, len);
 	if (ret <= 0)
 		return -EIO;
 
-	tcp_sbuf->len += (size_t)ret;
+	sbuf->len += (size_t)ret;
 	return 0;
 }
 
-static int do_bio_write(pm_net_tcp_client_t *c, struct pm_net_tcp_ssl_client *ssl_c)
-{
-	struct pm_buf *tcp_rbuf = pm_net_tcp_client_get_recv_buf(c);
-	size_t uret;
-	int ret;
-
-	if (tcp_rbuf->len == 0)
-		return -EAGAIN;
-
-	ret = BIO_write(ssl_c->rbio, tcp_rbuf->buf, tcp_rbuf->len);
-	if (ret <= 0)
-		return -EIO;
-
-	uret = (size_t)ret;
-	if (uret > tcp_rbuf->len)
-		return -EINVAL;
-
-	if (uret < tcp_rbuf->len) {
-		memmove(tcp_rbuf->buf, tcp_rbuf->buf + uret, tcp_rbuf->len - uret);
-		tcp_rbuf->len -= uret;
-	} else {
-		tcp_rbuf->len = 0;
-	}
-
-	return 0;
-}
-
-static int handle_ssl_error(pm_net_tcp_client_t *c,
-			    struct pm_net_tcp_ssl_client *ssl_c,
-			    int ret)
+static int handle_ssl_err(struct pm_net_tcp_ssl_client *ssl_c, int ret,
+			  struct pm_buf *tcp_rbuf, struct pm_buf *tcp_sbuf)
 {
 	switch (SSL_get_error(ssl_c->ssl, ret)) {
 	case SSL_ERROR_WANT_READ:
-		return do_bio_read(c, ssl_c);
+		return do_bio_read(ssl_c, tcp_sbuf);
 	case SSL_ERROR_WANT_WRITE:
-		return do_bio_write(c, ssl_c);
+		return do_bio_write(ssl_c, tcp_rbuf);
 	default:
 		return -EIO;
 	}
 }
 
-static int pm_net_tcp_ssl_client_do_accept(pm_net_tcp_client_t *c,
-					   struct pm_net_tcp_ssl_client *ssl_c)
-{
-	int ret = SSL_accept(ssl_c->ssl);
-	if (ret != 1)
-		return handle_ssl_error(c, ssl_c, ret);
-
-	ssl_c->has_accepted = true;
-	if (ssl_c->ssl_ctx->accept_cb)
-		ret = ssl_c->ssl_ctx->accept_cb(ssl_c->ssl_ctx, ssl_c);
-
-	return 0;
-}
-
-static int pm_net_tcp_ssl_do_recv(pm_net_tcp_client_t *c,
-				  struct pm_net_tcp_ssl_client *ssl_c)
+static int do_ssl_read(struct pm_net_tcp_ssl_client *ssl_c,
+		       struct pm_buf *tcp_rbuf, struct pm_buf *tcp_sbuf)
 {
 	struct pm_buf *ssl_rbuf = &ssl_c->recv_buf;
 	size_t uret, len;
@@ -126,7 +109,7 @@ static int pm_net_tcp_ssl_do_recv(pm_net_tcp_client_t *c,
 	buf = ssl_rbuf->buf + ssl_rbuf->len;
 	ret = SSL_read(ssl_c->ssl, buf, len - 1);
 	if (ret <= 0)
-		return handle_ssl_error(c, ssl_c, ret);
+		return handle_ssl_err(ssl_c, ret, tcp_rbuf, tcp_sbuf);
 
 	uret = (size_t)ret;
 	if (uret > len - 1)
@@ -134,7 +117,6 @@ static int pm_net_tcp_ssl_do_recv(pm_net_tcp_client_t *c,
 
 	ssl_rbuf->len += uret;
 	ssl_rbuf->buf[ssl_rbuf->len] = '\0';
-
 	ret = 0;
 	if (ssl_c->recv_cb)
 		ret = ssl_c->recv_cb(ssl_c);
@@ -145,19 +127,13 @@ static int pm_net_tcp_ssl_do_recv(pm_net_tcp_client_t *c,
 	return ret;
 }
 
-static int pm_net_tcp_ssl_do_send(pm_net_tcp_client_t *c,
-				  struct pm_net_tcp_ssl_client *ssl_c)
+static int do_ssl_write(struct pm_net_tcp_ssl_client *ssl_c,
+		        struct pm_buf *tcp_rbuf, struct pm_buf *tcp_sbuf)
 {
 	struct pm_buf *ssl_sbuf = &ssl_c->send_buf;
 	size_t uret, len;
 	char *buf;
 	int ret;
-
-	if (ssl_c->send_cb) {
-		ret = ssl_c->send_cb(ssl_c);
-		if (ret < 0 && ret != -EAGAIN)
-			return ret;
-	}
 
 	len = ssl_sbuf->len;
 	if (!len)
@@ -166,7 +142,7 @@ static int pm_net_tcp_ssl_do_send(pm_net_tcp_client_t *c,
 	buf = ssl_sbuf->buf;
 	ret = SSL_write(ssl_c->ssl, buf, len);
 	if (ret <= 0)
-		return handle_ssl_error(c, ssl_c, ret);
+		return handle_ssl_err(ssl_c, ret, tcp_rbuf, tcp_sbuf);
 
 	uret = (size_t)ret;
 	if (uret > len)
@@ -179,45 +155,61 @@ static int pm_net_tcp_ssl_do_send(pm_net_tcp_client_t *c,
 		ssl_sbuf->len = 0;
 	}
 
-	return 0;
+	if (ssl_c->send_cb) {
+		ret = ssl_c->send_cb(ssl_c);
+		if (ret < 0 && ret != -EAGAIN)
+			return ret;
+	}
+
+	return do_bio_read(ssl_c, tcp_sbuf);
 }
 
 static int pm_net_tcp_ssl_client_recv_cb(pm_net_tcp_client_t *c)
 {
-	struct pm_net_tcp_ssl_client *ssl_c = pm_net_tcp_client_get_udata(c);
+	pm_net_tcp_ssl_client_t *ssl_c = pm_net_tcp_client_get_udata(c);
+	struct pm_buf *tcp_rbuf = pm_net_tcp_client_get_recv_buf(c);
+	struct pm_buf *tcp_sbuf = pm_net_tcp_client_get_send_buf(c);
 	int ret;
 
-	while (1) {
-		ret = do_bio_write(c, ssl_c);
-		if (ret)
-			return ret;
+	ret = do_bio_write(ssl_c, tcp_rbuf);
+	if (ret)
+		return ret;
 
-		if (!ssl_c->has_accepted) {
-			ret = pm_net_tcp_ssl_client_do_accept(c, ssl_c);
-			if (ret)
-				return ret;
-		}
+	if (!ssl_c->has_accepted) {
+		struct pm_net_tcp_ssl_ctx *ssl_ctx = ssl_c->ssl_ctx;
 
-		ret = pm_net_tcp_ssl_do_recv(c, ssl_c);
-		if (ret)
-			return ret;
+		ret = SSL_accept(ssl_c->ssl);
+		if (ret != 1)
+			return handle_ssl_err(ssl_c, ret, tcp_rbuf, tcp_sbuf);
+
+		ssl_c->has_accepted = true;
+		if (ssl_ctx->accept_cb)
+			ret = ssl_ctx->accept_cb(ssl_ctx, ssl_c);
 	}
+
+	ret = do_ssl_read(ssl_c, tcp_rbuf, tcp_sbuf);
+	if (ret)
+		return ret;
+
+	ret = do_ssl_write(ssl_c, tcp_rbuf, tcp_sbuf);
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 static int pm_net_tcp_ssl_client_send_cb(pm_net_tcp_client_t *c)
 {
-	struct pm_net_tcp_ssl_client *ssl_c = pm_net_tcp_client_get_udata(c);
+	pm_net_tcp_ssl_client_t *ssl_c = pm_net_tcp_client_get_udata(c);
+	struct pm_buf *tcp_rbuf = pm_net_tcp_client_get_recv_buf(c);
+	struct pm_buf *tcp_sbuf = pm_net_tcp_client_get_send_buf(c);
 	int ret;
 
-	while (1) {
-		ret = pm_net_tcp_ssl_do_send(c, ssl_c);
-		if (ret)
-			return ret;
+	ret = do_ssl_write(ssl_c, tcp_rbuf, tcp_sbuf);
+	if (ret)
+		return ret;
 
-		ret = do_bio_read(c, ssl_c);
-		if (ret)
-			return ret;
-	}
+	return 0;
 }
 
 static int pm_net_tcp_ssl_client_close_cb(pm_net_tcp_client_t *c)

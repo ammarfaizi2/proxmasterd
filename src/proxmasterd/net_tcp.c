@@ -21,6 +21,7 @@ struct pm_net_tcp_client {
 	pm_net_tcp_send_cb_t		send_cb;
 	pm_net_tcp_close_cb_t		close_cb;
 	bool				user_close;
+	bool				is_used;
 };
 
 struct pm_net_tcp_wrk {
@@ -111,10 +112,14 @@ int pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v)
 
 int __pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v)
 {
+	uint32_t isp;
+
 	if (s->sp == 0)
 		return -EAGAIN;
 
-	*v = s->arr[--s->sp];
+	isp = --s->sp;
+	*v = s->arr[isp];
+	s->arr[isp] = -1;
 	return 0;
 }
 
@@ -543,12 +548,16 @@ static int get_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client **
 
 	assert(c);
 	assert(c->fd < 0);
+	assert(c->idx == idx);
 	assert(!c->recv_buf.len);
 	assert(!c->send_buf.len);
 	assert(!c->recv_cb);
 	assert(!c->send_cb);
 	assert(!c->close_cb);
 	assert(!c->user_close);
+	assert(!c->is_used);
+
+	c->is_used = true;
 	*cp = c;
 	atomic_fetch_add(&w->nr_online_conn, 1u);
 	return ret;
@@ -556,9 +565,11 @@ static int get_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client **
 
 static int __put_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client *c, bool del_epoll)
 {
+	bool close_fd = false;
 	int ret;
 
 	pthread_mutex_lock(&w->stack.lock);
+	assert(c->is_used);
 
 	if (c->close_cb)
 		c->close_cb(c);
@@ -568,6 +579,7 @@ static int __put_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client 
 			ret = epoll_del(w->ep_fd, c->fd);
 			assert(!ret);
 		}
+		close_fd = true;
 		close(c->fd);
 		c->fd = -1;
 	}
@@ -583,10 +595,28 @@ static int __put_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client 
 	c->send_cb = NULL;
 	c->close_cb = NULL;
 	c->user_close = false;
+	c->is_used = false;
 	ret = __pm_stack_u32_push(&w->stack, c->idx);
 	assert(!ret);
 	pthread_mutex_unlock(&w->stack.lock);
 	atomic_fetch_sub(&w->nr_online_conn, 1u);
+
+	if (close_fd) {
+		struct pm_net_tcp_wrk *mw = &w->ctx->workers[0];
+		pm_net_tcp_ctx_t *ctx = w->ctx;
+
+		pthread_mutex_lock(&ctx->accept_lock);
+		if (ctx->accept_stopped) {
+			union epoll_data data;
+
+			data.u64 = EPL_EVT_ACCEPT;
+			ret = epoll_add(mw->ep_fd, ctx->tcp_fd, EPOLLIN, data);
+			assert(!ret);
+			ctx->accept_stopped = false;
+			send_event_fd(mw);
+		}
+		pthread_mutex_unlock(&ctx->accept_lock);
+	}
 	return ret;
 }
 
@@ -642,7 +672,7 @@ static int handle_accept_error(int err, struct pm_net_tcp_wrk *w)
  */
 static int give_client_fd_to_a_worker(struct pm_net_tcp_ctx *ctx, int fd,
 				      const struct sockaddr_in46 *addr)
-{	
+{
 	struct pm_net_tcp_client *c;
 	struct pm_net_tcp_wrk *w;
 	union epoll_data data;
@@ -659,6 +689,9 @@ static int give_client_fd_to_a_worker(struct pm_net_tcp_ctx *ctx, int fd,
 	c->src_addr = *addr;
 	c->ep_mask = EPOLLIN;
 
+	if (ctx->accept_cb)
+		ctx->accept_cb(ctx, c);
+
 	data.u64 = 0;
 	data.ptr = c;
 	data.u64 |= EPL_EVT_CLIENT;
@@ -668,9 +701,7 @@ static int give_client_fd_to_a_worker(struct pm_net_tcp_ctx *ctx, int fd,
 		return r;
 	}
 
-	if (ctx->accept_cb)
-		ctx->accept_cb(ctx, c);
-
+	send_event_fd(w);
 	return 0;
 }
 
@@ -718,88 +749,83 @@ static int apply_ep_mask(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client *c)
 	return epoll_mod(w->ep_fd, c->fd, c->ep_mask, data);
 }
 
-static int handle_event_client_send(struct pm_net_tcp_wrk *w,
-				    struct pm_net_tcp_client *c)
+static int handle_event_client_send(struct pm_net_tcp_client *c)
 {
-	struct pm_buf *b = &c->send_buf;
+	int err = 0;
 	ssize_t ret;
 	size_t len;
-	int err;
+	char *buf;
 
-	if (c->send_cb && !c->user_close) {
+	buf = c->send_buf.buf;
+	len = c->send_buf.len;
+	if (!len)
+		return 0;
+
+	ret = send(c->fd, buf, len, MSG_DONTWAIT);
+	if (ret < 0) {
+		err = -errno;
+		if (err == -EAGAIN || err == -EINTR)
+			return 0;
+
+		return err;
+	}
+
+	if (!ret)
+		return -ECONNRESET;
+
+	if ((size_t)ret < len) {
+		memmove(buf, buf + ret, len - (size_t)ret);
+		c->send_buf.len -= (size_t)ret;
+	} else {
+		c->send_buf.len = 0;
+	}
+
+	if (c->send_cb) {
 		err = c->send_cb(c);
 		if (err == -EAGAIN)
 			err = 0;
 	}
 
-	len = b->len;
-	if (!len)
-		return 0;
-
-	err = 0;
-	ret = send(c->fd, b->buf, len, MSG_DONTWAIT);
-	if (ret > 0) {
-		memmove(b->buf, b->buf + ret, len - ret);
-		b->len -= (size_t)ret;
-	} else if (ret == 0) {
-		err = -ECONNRESET;
-	} else {
-		err = -errno;
-	}
-
-	if (err == -EAGAIN || err == -EINTR)
-		err = 0;
-
-	if (c->user_close && !b->len)
-		err = -ECONNRESET;
-
-	if (!err) {
-		if (b->len) {
-			if (!(c->ep_mask & EPOLLOUT)) {
-				c->ep_mask |= EPOLLOUT;
-				err = apply_ep_mask(w, c);
-			}
-		} else if (c->ep_mask & EPOLLOUT) {
-			c->ep_mask &= ~EPOLLOUT;
-			err = apply_ep_mask(w, c);
-		}
-	}
-
 	return err;
 }
 
-static int handle_event_client_recv(struct pm_net_tcp_wrk *w,
-				    struct pm_net_tcp_client *c)
+static int handle_event_client_recv(struct pm_net_tcp_client *c)
 {
-	struct pm_buf *b = &c->recv_buf;
+	int err = 0;
 	ssize_t ret;
 	size_t len;
-	int err;
+	char *buf;
 
-	len = b->cap - b->len;
+	buf = c->recv_buf.buf + c->recv_buf.len;
+	len = c->recv_buf.cap - c->recv_buf.len;
 	if (!len) {
-		if (pm_buf_resize(b, (b->cap + 1) * 2))
+		if (pm_buf_resize(&c->recv_buf, (c->recv_buf.cap + 1) * 2))
 			return -ENOMEM;
-		len = b->cap - b->len;
+		buf = c->recv_buf.buf + c->recv_buf.len;
+		len = c->recv_buf.cap - c->recv_buf.len;
 	}
 
-	err = 0;
-	ret = recv(c->fd, b->buf + b->len, len, MSG_DONTWAIT);
-	if (ret > 0) {
-		b->len += (size_t)ret;
-		if (c->recv_cb)
-			err = c->recv_cb(c);
-	} else if (ret == 0) {
-		err = -ECONNRESET;
-	} else {
+	ret = recv(c->fd, buf, len, MSG_DONTWAIT);
+	if (ret < 0) {
 		err = -errno;
+		if (err == -EAGAIN || err == -EINTR)
+			return 0;
+		
+		return err;
 	}
 
-	if (err == -EAGAIN || err == -EINTR)
-		err = 0;
+	if (!ret)
+		return -ECONNRESET;
 
-	if (!err)
-		err = handle_event_client_send(w, c);
+	c->recv_buf.len += (size_t)ret;
+	if (c->recv_cb) {
+		err = c->recv_cb(c);
+		if (err == -EAGAIN)
+			err = 0;
+	}
+
+	if (c->send_buf.len)
+		err = handle_event_client_send(c);
 
 	return err;
 }
@@ -811,19 +837,27 @@ static int handle_event_client(struct pm_net_tcp_wrk *w, struct epoll_event *ev)
 	int ret = 0;
 
 	if (events & EPOLLIN) {
-		ret = handle_event_client_recv(w, c);
+		ret = handle_event_client_recv(c);
 		if (ret)
 			return ret;
 	}
 
 	if (events & EPOLLOUT) {
-		ret = handle_event_client_send(w, c);
+		ret = handle_event_client_send(c);
 		if (ret)
 			return ret;
 	}
 
-	if (events & (EPOLLERR | EPOLLHUP))
-		ret = -ECONNRESET;
+	if (c->user_close || (events & (EPOLLERR | EPOLLHUP)))
+		return -ECONNRESET;
+
+	if ((c->ep_mask & EPOLLOUT) && !(c->send_buf.len)) {
+		c->ep_mask &= ~EPOLLOUT;
+		ret = apply_ep_mask(w, c);
+	} else if (!(c->ep_mask & EPOLLOUT) && c->send_buf.len) {
+		c->ep_mask |= EPOLLOUT;
+		ret = apply_ep_mask(w, c);
+	}
 
 	return ret;
 }
