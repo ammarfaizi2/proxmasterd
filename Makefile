@@ -22,7 +22,8 @@ C_SOURCES = \
 	src/proxmasterd/entry.c \
 	src/proxmasterd/http.c \
 	src/proxmasterd/net_tcp_ssl.c \
-	src/proxmasterd/net_tcp.c
+	src/proxmasterd/net_tcp.c \
+	src/proxmasterd/web.c
 
 CXX_SOURCES =
 

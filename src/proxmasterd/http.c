@@ -28,6 +28,32 @@ struct pm_http_client {
 	uint32_t			nr_reqs;
 };
 
+const char *pm_http_method(uint8_t method)
+{
+	switch (method) {
+	case PM_HTTP_METHOD_GET:
+		return "GET";
+	case PM_HTTP_METHOD_POST:
+		return "POST";
+	case PM_HTTP_METHOD_PUT:
+		return "PUT";
+	case PM_HTTP_METHOD_DELETE:
+		return "DELETE";
+	case PM_HTTP_METHOD_HEAD:
+		return "HEAD";
+	case PM_HTTP_METHOD_OPTIONS:
+		return "OPTIONS";
+	case PM_HTTP_METHOD_TRACE:
+		return "TRACE";
+	case PM_HTTP_METHOD_CONNECT:
+		return "CONNECT";
+	case PM_HTTP_METHOD_PATCH:
+		return "PATCH";
+	default:
+		return "UNKNOWN";
+	}
+}
+
 void pm_http_ctx_set_req_cb(pm_http_ctx_t *ctx, pm_http_req_cb_t cb, void *arg)
 {
 	ctx->req_cb = cb;

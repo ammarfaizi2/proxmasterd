@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include <proxmasterd/http.h>
+#include <proxmasterd/web.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -27,6 +28,7 @@ int main(int argc, char *argv[])
 	if (err)
 		return err;
 
+	pm_http_ctx_set_req_cb(ctx, &pm_web_handle_req, NULL);
 	pm_http_ctx_run(ctx);
 	pm_http_ctx_wait(ctx);
 	pm_http_ctx_stop(ctx);
