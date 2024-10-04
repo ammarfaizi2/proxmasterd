@@ -8,7 +8,7 @@ CC = clang
 CXX = clang++
 LD = clang++
 
-OPTIMIZATION = -O2 -fsanitize=address
+OPTIMIZATION = -O2
 INCLUDE_FLAGS = -I./src
 DEFFLAGS = -D_GNU_SOURCE
 CFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
