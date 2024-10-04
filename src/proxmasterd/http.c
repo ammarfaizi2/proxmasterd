@@ -127,9 +127,9 @@ static int pm_http_client_add_req(struct pm_http_client *hc,
 	if (!new_res)
 		return -ENOMEM;
 
-	hc->req[hc->nr_reqs] = *req;
 	hc->res = new_res;
 	memset(&hc->res[hc->nr_reqs], 0, sizeof(hc->res[hc->nr_reqs]));
+	hc->req[hc->nr_reqs] = *req;
 	hc->nr_reqs = new_nr_reqs;
 	return 0;
 }
@@ -215,7 +215,7 @@ int pm_http_hdr_get(struct pm_http_hdr *hdr, const char *key, char **val)
 	for (i = 0; i < hdr->nr_pairs; i++) {
 		struct pm_http_hdr_pair *pair = &hdr->pairs[i];
 
-		if (!strcmp(pair->key, key)) {
+		if (!strcasecmp(pair->key, key)) {
 			*val = pair->val;
 			return 0;
 		}
@@ -556,6 +556,11 @@ static int parse_http_hdr(struct pm_http_req *req, struct pm_buf *rbuf)
 		val = p;
 		*q = '\0';
 
+		if (!strcasecmp(key, "Content-Length")) {
+			req->content_length = strtoull(val, NULL, 10);
+			req->cl_remain = req->content_length;
+		}
+
 		if (pm_http_hdr_add(&req->hdr, key, val))
 			return -ENOMEM;
 
@@ -678,6 +683,17 @@ static int handle_requests(struct pm_http_client *hc)
 	for (i = 0; i < hc->nr_reqs; i++) {
 		struct pm_http_req *req = &hc->req[i];
 		struct pm_http_res *res = &hc->res[i];
+		struct pm_buf *req_body = &req->body;
+
+		if (!req_body->buf) {
+			if (pm_buf_init(req_body, 2))
+				return -ENOMEM;
+		}
+
+		if (req_body->buf[req_body->len] != '\0') {
+			if (pm_buf_append(req_body, "\0", 1))
+				return -ENOMEM;
+		}
 
 		res->status_code = 200;
 		if (ctx->req_cb)

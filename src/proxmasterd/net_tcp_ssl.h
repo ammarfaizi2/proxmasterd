@@ -7,6 +7,10 @@
 #include <openssl/err.h>
 #include <openssl/bio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct pm_net_tcp_ssl_arg {
 	char				cert_file[512];
 	char				key_file[512];
@@ -43,5 +47,9 @@ struct pm_buf *pm_net_tcp_ssl_client_get_send_buf(pm_net_tcp_ssl_client_t *c);
 const struct sockaddr_in46 *pm_net_tcp_ssl_client_get_src_addr(pm_net_tcp_ssl_client_t *c);
 
 void pm_net_tcp_ssl_client_user_close(pm_net_tcp_ssl_client_t *c);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* #ifndef PROXMASTERD__NET_SSL_H */

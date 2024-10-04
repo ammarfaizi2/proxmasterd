@@ -5,6 +5,10 @@
 #include <proxmasterd/net_tcp.h>
 #include <proxmasterd/net_tcp_ssl.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
 	PM_HTTP_NET_CTX_PLAIN	= 0,
 	PM_HTTP_NET_CTX_SSL	= 1
@@ -103,5 +107,9 @@ void pm_http_ctx_run(pm_http_ctx_t *ctx);
 void pm_http_ctx_wait(pm_http_ctx_t *ctx);
 void pm_http_ctx_stop(pm_http_ctx_t *ctx);
 void pm_http_ctx_destroy(pm_http_ctx_t *ctx_p);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* #ifndef PROXMASTERD__HTTP_H */

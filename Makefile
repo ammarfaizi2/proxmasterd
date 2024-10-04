@@ -8,7 +8,7 @@ CC = clang
 CXX = clang++
 LD = clang++
 
-OPTIMIZATION = -O2
+OPTIMIZATION = -O2 -fsanitize=address
 INCLUDE_FLAGS = -I./src
 DEFFLAGS = -D_GNU_SOURCE
 CFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
@@ -22,10 +22,10 @@ C_SOURCES = \
 	src/proxmasterd/entry.c \
 	src/proxmasterd/http.c \
 	src/proxmasterd/net_tcp_ssl.c \
-	src/proxmasterd/net_tcp.c \
-	src/proxmasterd/web.c
+	src/proxmasterd/net_tcp.c
 
-CXX_SOURCES =
+CXX_SOURCES = \
+	src/proxmasterd/web.cpp
 
 OBJECTS = $(C_SOURCES:.c=.c.o) $(CXX_SOURCES:.cpp=.cpp.o)
 DEPS = $(OBJECTS:.o=.d)

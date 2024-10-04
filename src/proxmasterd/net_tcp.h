@@ -2,18 +2,16 @@
 #ifndef PROXMASTERD__NET_H
 #define PROXMASTERD__NET_H
 
-#include <sys/eventfd.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/epoll.h>
-
 #include <netinet/in.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <errno.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct sockaddr_in46 {
 	union {
@@ -83,5 +81,9 @@ struct pm_buf *pm_net_tcp_client_get_send_buf(pm_net_tcp_client_t *c);
 const struct sockaddr_in46 *pm_net_tcp_client_get_src_addr(pm_net_tcp_client_t *c);
 
 void pm_net_tcp_client_user_close(pm_net_tcp_client_t *c);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* #ifndef PROXMASTERD__NET_H */
