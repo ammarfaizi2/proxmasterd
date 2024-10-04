@@ -63,7 +63,7 @@ enum {
 #define EPL_EV_MASK		(0xffffull << 48ull)
 #define GET_EPL_EV(data)	((data) & EPL_EV_MASK)
 #define GET_EPL_DT(data)	((void *)((data) & ~EPL_EV_MASK))
-#define INIT_BUF_SIZE		4096
+#define INIT_BUF_SIZE		2048
 
 int pm_stack_u32_init(struct pm_stack_u32 *s, size_t cap)
 {
@@ -233,20 +233,8 @@ int pm_buf_resize(struct pm_buf *b, size_t new_cap)
 
 static int client_init(struct pm_net_tcp_client *c)
 {
-	int ret;
-
 	c->fd = -1;
 	memset(&c->src_addr, 0, sizeof(c->src_addr));
-	ret = pm_buf_init(&c->recv_buf, 4096);
-	if (ret)
-		return ret;
-
-	ret = pm_buf_init(&c->send_buf, 4096);
-	if (ret) {
-		pm_buf_destroy(&c->recv_buf);
-		return ret;
-	}
-
 	return 0;
 }
 
@@ -557,6 +545,17 @@ static int get_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client **
 	assert(!c->user_close);
 	assert(!c->is_used);
 
+	if (pm_buf_init(&c->recv_buf, INIT_BUF_SIZE)) {
+		pm_stack_u32_push(&w->stack, idx);
+		return -ENOMEM;
+	}
+
+	if (pm_buf_init(&c->send_buf, INIT_BUF_SIZE)) {
+		pm_buf_destroy(&c->recv_buf);
+		pm_stack_u32_push(&w->stack, idx);
+		return -ENOMEM;
+	}
+
 	c->is_used = true;
 	*cp = c;
 	atomic_fetch_add(&w->nr_online_conn, 1u);
@@ -584,10 +583,10 @@ static int __put_client_slot(struct pm_net_tcp_wrk *w, struct pm_net_tcp_client 
 		c->fd = -1;
 	}
 
-	if (c->recv_buf.cap > INIT_BUF_SIZE)
-		pm_buf_resize(&c->recv_buf, INIT_BUF_SIZE);
-	if (c->send_buf.cap > INIT_BUF_SIZE)
-		pm_buf_resize(&c->send_buf, INIT_BUF_SIZE);
+	if (c->recv_buf.cap)
+		pm_buf_destroy(&c->recv_buf);
+	if (c->send_buf.cap)
+		pm_buf_destroy(&c->send_buf);
 
 	c->recv_buf.len = 0;
 	c->send_buf.len = 0;
