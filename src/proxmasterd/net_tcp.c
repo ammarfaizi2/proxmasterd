@@ -728,7 +728,7 @@ static int give_client_fd_to_a_worker(struct pm_net_tcp_ctx *ctx, int fd,
 
 static int handle_event_accept(struct pm_net_tcp_wrk *w)
 {
-	static const uint32_t NR_MAX_ACCEPT_CYCLE = 4;
+	static const uint32_t NR_MAX_ACCEPT_CYCLE = 32;
 	struct sockaddr_in46 addr;
 	uint32_t counter = 0;
 	socklen_t len;
