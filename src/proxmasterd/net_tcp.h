@@ -58,6 +58,7 @@ int pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v);
 
 int pm_buf_init(struct pm_buf *b, size_t cap);
 int pm_buf_append(struct pm_buf *b, const void *data, size_t len);
+int pm_buf_append_fmt(struct pm_buf *b, const void *fmt, ...);
 int pm_buf_resize(struct pm_buf *b, size_t new_cap);
 void pm_buf_destroy(struct pm_buf *b);
 

@@ -15,18 +15,14 @@ struct pm_http_ctx {
 };
 
 struct pm_http_client {
-	uint8_t				method;
 	bool				use_ssl;
 	bool				keep_alive;
-
-	struct pm_http_str		uri;
-	struct pm_http_str		qs;
-	struct pm_http_str		ver;
-
-	struct pm_http_hdr		hdr;
 	struct pm_buf			*recv_buf;
 	struct pm_buf			*send_buf;
 	void				*nclient;
+	struct pm_http_req		*req;
+	struct pm_http_res		*res;
+	uint32_t			nr_reqs;
 };
 
 static int pm_http_str_append(struct pm_http_str *str, const char *s, size_t len)
@@ -79,6 +75,75 @@ static char *strtolower(char *str)
 	return str;
 }
 
+static int pm_http_client_add_req(struct pm_http_client *hc,
+				  struct pm_http_req *req)
+{
+	struct pm_http_req *new_reqs;
+	struct pm_http_res *new_res;
+	size_t new_nr_reqs;
+
+	new_nr_reqs = hc->nr_reqs + 1;
+	new_reqs = realloc(hc->req, new_nr_reqs * sizeof(*new_reqs));
+	if (!new_reqs)
+		return -ENOMEM;
+
+	hc->req = new_reqs;
+	new_res = realloc(hc->res, new_nr_reqs * sizeof(*new_res));
+	if (!new_res)
+		return -ENOMEM;
+
+	hc->req[hc->nr_reqs] = *req;
+	hc->res = new_res;
+	memset(&hc->res[hc->nr_reqs], 0, sizeof(hc->res[hc->nr_reqs]));
+	hc->nr_reqs = new_nr_reqs;
+	return 0;
+}
+
+static void pm_http_hdr_destroy(struct pm_http_hdr *hdr)
+{
+	size_t i;
+
+	if (!hdr->nr_pairs)
+		return;
+
+	for (i = 0; i < hdr->nr_pairs; i++) {
+		struct pm_http_hdr_pair *pair = &hdr->pairs[i];
+
+		free(pair->key);
+		free(pair->val);
+	}
+
+	free(hdr->pairs);
+	memset(hdr, 0, sizeof(*hdr));
+}
+
+static void pm_http_client_free_reqs(struct pm_http_client *hc)
+{
+	size_t i;
+
+	if (!hc->nr_reqs)
+		return;
+
+	for (i = 0; i < hc->nr_reqs; i++) {
+		struct pm_http_req *req = &hc->req[i];
+		struct pm_http_res *res = &hc->res[i];
+
+		pm_http_str_free(&req->uri);
+		pm_http_str_free(&req->qs);
+		pm_buf_destroy(&req->body);
+		pm_http_hdr_destroy(&req->hdr);
+
+		pm_buf_destroy(&res->body);
+		pm_http_hdr_destroy(&res->hdr);
+	}
+
+	free(hc->req);
+	free(hc->res);
+	hc->req = NULL;
+	hc->res = NULL;
+	hc->nr_reqs = 0;
+}
+
 int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val)
 {
 	struct pm_http_hdr_pair *pair;
@@ -122,24 +187,6 @@ int pm_http_hdr_get(struct pm_http_hdr *hdr, const char *key, char **val)
 	}
 
 	return -ENOENT;
-}
-
-static void pm_http_hdr_destroy(struct pm_http_hdr *hdr)
-{
-	size_t i;
-
-	if (!hdr->nr_pairs)
-		return;
-
-	for (i = 0; i < hdr->nr_pairs; i++) {
-		struct pm_http_hdr_pair *pair = &hdr->pairs[i];
-
-		free(pair->key);
-		free(pair->val);
-	}
-
-	free(hdr->pairs);
-	memset(hdr, 0, sizeof(*hdr));
 }
 
 int pm_http_ctx_init(pm_http_ctx_t **ctx_p)
@@ -328,14 +375,12 @@ void pm_http_ctx_destroy(pm_http_ctx_t *ctx_p)
 	memset(ctx_p, 0, sizeof(*ctx_p));
 }
 
-static int parse_http_hdr(struct pm_http_client *hc)
+static int parse_http_hdr(struct pm_http_req *req, struct pm_buf *rbuf)
 {
 	char *method, *uri, *qs, *ver, *p, *q, *dcrlf, c;
-	char *to_null[2];
-
-	struct pm_buf *rbuf = hc->recv_buf;
 	size_t len = rbuf->len;
 	size_t eaten_len;
+	char *to_null[2];
 
 	if (len < 6)
 		return -EAGAIN;
@@ -364,23 +409,23 @@ static int parse_http_hdr(struct pm_http_client *hc)
 		return -EAGAIN;
 
 	if (!strncmp(method, "GET", 3))
-		hc->method = PM_HTTP_METHOD_GET;
+		req->method = PM_HTTP_METHOD_GET;
 	else if (!strncmp(method, "POST", 4))
-		hc->method = PM_HTTP_METHOD_POST;
+		req->method = PM_HTTP_METHOD_POST;
 	else if (!strncmp(method, "PUT", 3))
-		hc->method = PM_HTTP_METHOD_PUT;
+		req->method = PM_HTTP_METHOD_PUT;
 	else if (!strncmp(method, "DELETE", 6))
-		hc->method = PM_HTTP_METHOD_DELETE;
+		req->method = PM_HTTP_METHOD_DELETE;
 	else if (!strncmp(method, "HEAD", 4))
-		hc->method = PM_HTTP_METHOD_HEAD;
+		req->method = PM_HTTP_METHOD_HEAD;
 	else if (!strncmp(method, "OPTIONS", 7))
-		hc->method = PM_HTTP_METHOD_OPTIONS;
+		req->method = PM_HTTP_METHOD_OPTIONS;
 	else if (!strncmp(method, "TRACE", 5))
-		hc->method = PM_HTTP_METHOD_TRACE;
+		req->method = PM_HTTP_METHOD_TRACE;
 	else if (!strncmp(method, "CONNECT", 7))
-		hc->method = PM_HTTP_METHOD_CONNECT;
+		req->method = PM_HTTP_METHOD_CONNECT;
 	else if (!strncmp(method, "PATCH", 5))
-		hc->method = PM_HTTP_METHOD_PATCH;
+		req->method = PM_HTTP_METHOD_PATCH;
 	else
 		return -EINVAL;
 
@@ -410,8 +455,22 @@ static int parse_http_hdr(struct pm_http_client *hc)
 	}
 
 	ver = p;
-	if (strncmp(ver, "HTTP/1.0", 8) && strncmp(ver, "HTTP/1.1", 8))
+
+	if (!strncmp(ver, "HTTP/0.9", 8))
 		return -EINVAL;
+	else if (!strncmp(ver, "HTTP/1.0", 8))
+		req->ver = PM_HTTP_VER_10;
+	else if (!strncmp(ver, "HTTP/1.1", 8))
+		req->ver = PM_HTTP_VER_11;
+	else if (!strncmp(ver, "HTTP/2.0", 8))
+		return -EINVAL;
+	else if (!strncmp(ver, "HTTP/3.0", 8))
+		return -EINVAL;
+	else if (!strncmp(ver, "HTTP/3.1", 8))
+		return -EINVAL;
+	else
+		return -EINVAL;
+
 	p += 8;
 	len -= 8;
 	if (!len) {
@@ -438,13 +497,10 @@ static int parse_http_hdr(struct pm_http_client *hc)
 	to_null[0][0] = '\0';
 	to_null[1][0] = '\0';
 
-	if (pm_http_strdup(&hc->uri, uri, strlen(uri)))
+	if (pm_http_strdup(&req->uri, uri, strlen(uri)))
 		return -ENOMEM;
 
-	if (qs && pm_http_strdup(&hc->qs, qs, strlen(qs)))
-		return -ENOMEM;
-
-	if (pm_http_strdup(&hc->ver, ver, strlen(ver)))
+	if (qs && pm_http_strdup(&req->qs, qs, strlen(qs)))
 		return -ENOMEM;
 
 	do {
@@ -465,7 +521,7 @@ static int parse_http_hdr(struct pm_http_client *hc)
 		val = p;
 		*q = '\0';
 
-		if (pm_http_hdr_add(&hc->hdr, key, val))
+		if (pm_http_hdr_add(&req->hdr, key, val))
 			return -ENOMEM;
 
 		p = q + 2;
@@ -492,9 +548,43 @@ static int parse_http_hdr(struct pm_http_client *hc)
 	return 0;
 }
 
-static struct pm_http_client *pm_http_alloc_client(void)
+static int parse_http_body(struct pm_http_req *req, struct pm_buf *rbuf)
 {
-	return calloc(1, sizeof(struct pm_http_client));
+	int ret;
+
+	if (!req->cl_remain)
+		return 0;
+
+	if ((rbuf->len == req->cl_remain) && (req->cl_remain == req->content_length)) {
+		/*
+		 * Don't bother copying the buffer if it's already the
+		 * right size.
+		 */
+		req->body = *rbuf;
+		rbuf->len = 0;
+		rbuf->cap = 0;
+		req->cl_remain = 0;
+		return pm_buf_init(rbuf, 4096);
+	}
+
+	if (req->cl_remain > rbuf->len) {
+		ret = pm_buf_append(&req->body, rbuf->buf, rbuf->len);
+		if (ret)
+			return ret;
+
+		req->cl_remain -= rbuf->len;
+		rbuf->len = 0;
+		return -EAGAIN;
+	} else {
+		ret = pm_buf_append(&req->body, rbuf->buf, req->cl_remain);
+		if (ret)
+			return ret;
+
+		rbuf->len -= req->cl_remain;
+		memmove(rbuf->buf, rbuf->buf + req->cl_remain, rbuf->len);
+		req->cl_remain = 0;
+		return 0;
+	}
 }
 
 static void pm_http_client_close(struct pm_http_client *hc)
@@ -505,42 +595,220 @@ static void pm_http_client_close(struct pm_http_client *hc)
 		pm_net_tcp_client_user_close(hc->nclient);
 }
 
-static const char res_test[] =
-"HTTP/1.0 200 OK\r\n"
-"Server: proxmasterd/0.0.1\r\n"
-"Content-Type: text/plain; charset=UTF-8\r\n"
-"Content-Length: 13\r\n"
-"Connection: keep-alive\r\n"
-"\r\n"
-"Hello World!\n";
-
-static int pm_http_handle_recv(struct pm_http_client *hc)
+static int collect_requests(struct pm_http_client *hc)
 {
 	struct pm_buf *rbuf = hc->recv_buf;
+	struct pm_http_req req;
 	int ret;
 
+	memset(&req, 0, sizeof(req));
+
+	/*
+	 * Ensure the buffer is null-terminated.
+	 */
 	if (rbuf->len == rbuf->cap) {
 		if (pm_buf_resize(rbuf, rbuf->cap + 1))
 			return -ENOMEM;
 	}
 	rbuf->buf[rbuf->len] = '\0';
 
-	ret = parse_http_hdr(hc);
+	ret = parse_http_hdr(&req, rbuf);
 	if (ret < 0) {
 		if (ret != -EAGAIN || hc->recv_buf->len >= 8192)
 			pm_http_client_close(hc);
 		return ret;
 	}
 
-	return pm_buf_append(hc->send_buf, res_test, sizeof(res_test) - 1);
+	ret = parse_http_body(&req, rbuf);
+	if (ret < 0) {
+		if (ret != -EAGAIN)
+			pm_http_client_close(hc);
+		return ret;
+	}
+
+	ret = pm_http_client_add_req(hc, &req);
+	if (ret) {
+		pm_http_client_close(hc);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int handle_requests(struct pm_http_client *hc)
+{
+	size_t i;
+
+	for (i = 0; i < hc->nr_reqs; i++) {
+		struct pm_http_req *req = &hc->req[i];
+		struct pm_http_res *res = &hc->res[i];
+		int ret;
+
+		if (req->method == PM_HTTP_METHOD_GET) {
+			ret = pm_http_hdr_add(&res->hdr, "Content-Type", "text/plain");
+			if (ret)
+				return ret;
+
+			ret = pm_buf_append(&res->body, "Hello world!\n", 13);
+			if (ret)
+				return ret;
+
+			res->status_code = 200;
+		} else {
+			res->status_code = 405;
+		}
+
+		res->ver = req->ver;
+	}
+
+	return 0;
+}
+
+static const char *translate_http_code(uint16_t code)
+{
+	switch (code) {
+	case 200:
+		return "OK";
+	case 400:
+		return "Bad Request";
+	case 404:
+		return "Not Found";
+	case 405:
+		return "Method Not Allowed";
+	case 500:
+		return "Internal Server Error";
+	case 501:
+		return "Not Implemented";
+	case 503:
+		return "Service Unavailable";
+	case 505:
+		return "HTTP Version Not Supported";
+	default:
+		return "Unknown";
+	}
+}
+
+static void gen_date(char *buf)
+{
+	time_t t;
+	struct tm tm;
+
+	t = time(NULL);
+	gmtime_r(&t, &tm);
+	strftime(buf, 30, "%a, %d %b %Y %H:%M:%S GMT", &tm);
+}
+
+static bool should_keep_alive(struct pm_http_req *req)
+{
+	char *val;
+	int ret;
+
+	ret = pm_http_hdr_get(&req->hdr, "connection", &val);
+	if (!ret) {
+		if (!strcasecmp(val, "close"))
+			return false;
+
+		if (!strcasecmp(val, "keep-alive"))
+			return true;
+	}
+
+	return (req->ver == PM_HTTP_VER_11);
+}
+
+static int construct_response(struct pm_http_req *req, struct pm_http_res *res,
+			      struct pm_buf *sbuf, bool *keep_alive)
+{
+	char date[32];
+	int ret = 0;
+	size_t i;
+
+	*keep_alive = should_keep_alive(req);
+
+	if (res->ver == PM_HTTP_VER_10)
+		ret = pm_buf_append(sbuf, "HTTP/1.0 ", 9);
+	else
+		ret = pm_buf_append(sbuf, "HTTP/1.1 ", 9);
+
+	ret |= pm_buf_append_fmt(sbuf, "%u %s\r\n", res->status_code, translate_http_code(res->status_code));
+	ret |= pm_buf_append_fmt(sbuf, "Server: Proxmasterd\r\n");
+	gen_date(date);
+	ret |= pm_buf_append_fmt(sbuf, "Date: %s\r\n", date);
+	ret |= pm_buf_append_fmt(sbuf, "Connection: %s\r\n", *keep_alive ? "keep-alive" : "close");
+	ret |= pm_buf_append_fmt(sbuf, "Content-Length: %zu\r\n", res->body.len);
+	if (ret)
+		return -ENOMEM;
+
+	for (i = 0; i < res->hdr.nr_pairs; i++) {
+		struct pm_http_hdr_pair *pair = &res->hdr.pairs[i];
+
+		ret |= pm_buf_append_fmt(sbuf, "%s: %s\r\n", pair->key, pair->val);
+	}
+
+	ret |= pm_buf_append(sbuf, "\r\n", 2);
+	ret |= pm_buf_append(sbuf, res->body.buf, res->body.len);
+	if (ret)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static int send_responses(struct pm_http_client *hc)
+{
+	bool keep_alive, tmp;
+	size_t i;
+	int ret;
+
+	keep_alive = true;
+	for (i = 0; i < hc->nr_reqs; i++) {
+		ret = construct_response(&hc->req[i], &hc->res[i], hc->send_buf,
+					 &tmp);
+		if (ret)
+			return ret;
+
+		keep_alive = (keep_alive && tmp);
+	}
+
+	pm_http_client_free_reqs(hc);
+	hc->keep_alive = keep_alive;
+	return 0;
+}
+
+static struct pm_http_client *pm_http_alloc_client(void)
+{
+	return calloc(1, sizeof(struct pm_http_client));
+}
+
+static int pm_http_handle_recv(struct pm_http_client *hc)
+{
+	struct pm_buf *rbuf = hc->recv_buf;
+	int ret;
+
+	while (1) {
+		ret = collect_requests(hc);
+		if (ret)
+			return ret;
+
+		if (!rbuf->len)
+			break;
+	}
+
+	ret = handle_requests(hc);
+	if (ret)
+		return ret;
+
+	ret = send_responses(hc);
+	if (ret)
+		return ret;
+
+	if (!hc->keep_alive)
+		pm_http_client_close(hc);
+
+	return 0;
 }
 
 static int pm_http_handle_close(struct pm_http_client *hc)
 {
-	pm_http_hdr_destroy(&hc->hdr);
-	pm_http_str_free(&hc->uri);
-	pm_http_str_free(&hc->qs);
-	pm_http_str_free(&hc->ver);
+	pm_http_client_free_reqs(hc);
 	free(hc);
 	return 0;
 }
