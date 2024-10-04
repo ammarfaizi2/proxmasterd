@@ -1,0 +1,108 @@
+{
+	"entries": [
+		{
+			"auth_connect_whitelist": "",
+			"expired_at": 0,
+			"hev_proxy": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			},
+			"id": 0,
+			"proxy": "",
+			"state": "stopped",
+			"tun2socks": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			}
+		},
+		{
+			"auth_connect_whitelist": "",
+			"expired_at": 0,
+			"hev_proxy": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			},
+			"id": 0,
+			"proxy": "",
+			"state": "stopped",
+			"tun2socks": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			}
+		},
+		{
+			"auth_connect_whitelist": "",
+			"expired_at": 0,
+			"hev_proxy": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			},
+			"id": 0,
+			"proxy": "",
+			"state": "stopped",
+			"tun2socks": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			}
+		},
+		{
+			"auth_connect_whitelist": "",
+			"expired_at": 0,
+			"hev_proxy": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			},
+			"id": 0,
+			"proxy": "",
+			"state": "stopped",
+			"tun2socks": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			}
+		},
+		{
+			"auth_connect_whitelist": "",
+			"expired_at": 0,
+			"hev_proxy": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			},
+			"id": 0,
+			"proxy": "",
+			"state": "stopped",
+			"tun2socks": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			}
+		},
+		{
+			"auth_connect_whitelist": "",
+			"expired_at": 123,
+			"hev_proxy": {
+				"args": [],
+				"cmd": "",
+				"pid": 0
+			},
+			"id": 0,
+			"proxy": "socks5://127.0.0.1:1234",
+			"state": "running",
+			"tun2socks": {
+				"args": [
+					"3600"
+				],
+				"cmd": "/bin/sleep",
+				"pid": 0
+			}
+		}
+	]
+}

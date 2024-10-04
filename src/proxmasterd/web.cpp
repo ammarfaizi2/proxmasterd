@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
+#include <proxmasterd/proxmaster.hpp>
 #include <proxmasterd/web.h>
 #include <nlohmann/json.hpp>
 #include <string.h>
@@ -11,7 +12,7 @@ using json = nlohmann::json;
 struct hreq {
 	struct pm_http_req *req;
 	struct pm_http_res *res;
-	void *arg;
+	prox_ent_arr *pea;
 };
 
 enum {
@@ -119,6 +120,7 @@ static void rt_api_v1_proxy_start(struct hreq *h)
 {
 	const char *body = h->req->body.buf;
 	json j = json::parse(body);
+	struct prox_ent pe;
 	std::string proxy;
 	int64_t lifetime;
 
@@ -137,14 +139,20 @@ static void rt_api_v1_proxy_start(struct hreq *h)
 	if (lifetime < 0)
 		lifetime = -1;
 
-	json j2 = {
-		{ "status", "started" },
-		{ "proxy", proxy },
-		{ "lifetime", lifetime },
-		{ "auth_whitelist_connect", "11.11.11.11" }
-	};
-
-	rt_200_json(h, j2);
+	pe.state = PROX_ENT_ST_RUNNING;
+	pe.id = 0;
+	pe.expired_at = lifetime;
+	pe.proxy = proxy;
+	pe.auth_connect_whitelist = "";
+	pe.tun2socks.pid = 0;
+	pe.tun2socks.cmd = "/bin/sleep";
+	pe.tun2socks.set_args({ "3600" });
+	pe.tun2socks.exec_cmd();
+	pe.hev_proxy.pid = 0;
+	pe.hev_proxy.cmd = "";
+	h->pea->arr.push_back(pe);
+	h->pea->to_file("./proxmaster.json");
+	rt_200_json(h, pe.to_json());
 }
 
 static void rt_api_v1_proxy_stop(struct hreq *h)
@@ -153,6 +161,7 @@ static void rt_api_v1_proxy_stop(struct hreq *h)
 
 static void rt_api_v1_proxy_list(struct hreq *h)
 {
+	rt_200_json(h, h->pea->to_json());
 }
 
 static const struct route routes[] = {
@@ -205,7 +214,8 @@ static void scan_routes(size_t plen, const struct route *routes, struct hreq *h)
 	rt_404(h);
 }
 
-static void scan_route_prefixes(struct pm_http_req *req, struct pm_http_res *res)
+static void scan_route_prefixes(struct pm_http_req *req, struct pm_http_res *res,
+				void *arg)
 {
 	const char *uri = req->uri.str;
 	struct hreq h;
@@ -214,7 +224,7 @@ static void scan_route_prefixes(struct pm_http_req *req, struct pm_http_res *res
 
 	h.req = req;
 	h.res = res;
-	h.arg = nullptr;
+	h.pea = static_cast<prox_ent_arr *>(arg);
 
 	for (i = 0; prefixes[i].prefix; i++) {
 		plen = strlen(prefixes[i].prefix);
@@ -235,7 +245,7 @@ void pm_web_handle_req(struct pm_http_req *req, struct pm_http_res *res, void *a
 	const char *uri = req->uri.str;
 	char *ua = nullptr;
 
-	scan_route_prefixes(req, res);
+	scan_route_prefixes(req, res, arg);
 	if (pm_http_hdr_get(&req->hdr, "user-agent", &ua))
 		ua = (char *)"Unknown";
 	printf("R: %d # %s %s # %s\n", res->status_code, pm_http_method(req->method), uri, ua);

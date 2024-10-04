@@ -19,12 +19,13 @@ LIBS = -lpthread -lssl -lcrypto
 TARGET = proxmasterd
 
 C_SOURCES = \
-	src/proxmasterd/entry.c \
 	src/proxmasterd/http.c \
 	src/proxmasterd/net_tcp_ssl.c \
 	src/proxmasterd/net_tcp.c
 
 CXX_SOURCES = \
+	src/proxmasterd/entry.cpp \
+	src/proxmasterd/proxmaster.cpp \
 	src/proxmasterd/web.cpp
 
 OBJECTS = $(C_SOURCES:.c=.c.o) $(CXX_SOURCES:.cpp=.cpp.o)
