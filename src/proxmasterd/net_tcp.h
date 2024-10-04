@@ -4,10 +4,8 @@
 
 #include <netinet/in.h>
 #include <stdbool.h>
-#include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <errno.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,24 +33,12 @@ typedef int (*pm_net_tcp_send_cb_t)(pm_net_tcp_client_t *c);
 typedef int (*pm_net_tcp_close_cb_t)(pm_net_tcp_client_t *c);
 typedef int (*pm_net_tcp_accept_cb_t)(pm_net_tcp_ctx_t *ctx, pm_net_tcp_client_t *c);
 
-struct pm_stack_u32 {
-	size_t		bp;
-	size_t		sp;
-	uint32_t	*arr;
-	pthread_mutex_t	lock;
-};
-
 struct pm_net_tcp_arg {
 	uint16_t		nr_workers;
 	uint32_t		client_init_cap;
 	int			sock_backlog;
 	struct sockaddr_in46	bind_addr;
 };
-
-int __pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v);
-int pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v);
-int __pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v);
-int pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v);
 
 int pm_buf_init(struct pm_buf *b, size_t cap);
 int pm_buf_append(struct pm_buf *b, const void *data, size_t len);

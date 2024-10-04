@@ -7,12 +7,21 @@
 #include <sys/types.h>
 #include <sys/epoll.h>
 #include <stdatomic.h>
-#include <stdio.h>
+#include <pthread.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <errno.h>
+#include <stdio.h>
+
+struct pm_stack_u32 {
+	size_t		bp;
+	size_t		sp;
+	uint32_t	*arr;
+	pthread_mutex_t	lock;
+};
 
 struct pm_net_tcp_client {
 	int				fd;
@@ -70,7 +79,7 @@ enum {
 #define GET_EPL_DT(data)	((void *)((data) & ~EPL_EV_MASK))
 #define INIT_BUF_SIZE		2048
 
-int pm_stack_u32_init(struct pm_stack_u32 *s, size_t cap)
+static int pm_stack_u32_init(struct pm_stack_u32 *s, size_t cap)
 {
 	int ret;
 
@@ -89,14 +98,14 @@ int pm_stack_u32_init(struct pm_stack_u32 *s, size_t cap)
 	return 0;
 }
 
-void pm_stack_u32_destroy(struct pm_stack_u32 *s)
+static void pm_stack_u32_destroy(struct pm_stack_u32 *s)
 {
 	pthread_mutex_destroy(&s->lock);
 	free(s->arr);
 	memset(s, 0, sizeof(*s));
 }
 
-int __pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v)
+static int __pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v)
 {
 	if (s->sp == s->bp)
 		return -EAGAIN;
@@ -105,7 +114,7 @@ int __pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v)
 	return 0;
 }
 
-int pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v)
+static int pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v)
 {
 	int ret;
 
@@ -115,7 +124,7 @@ int pm_stack_u32_push(struct pm_stack_u32 *s, uint32_t v)
 	return ret;
 }
 
-int __pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v)
+static int __pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v)
 {
 	uint32_t isp;
 
@@ -128,7 +137,7 @@ int __pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v)
 	return 0;
 }
 
-int pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v)
+static int pm_stack_u32_pop(struct pm_stack_u32 *s, uint32_t *v)
 {
 	int ret;
 
