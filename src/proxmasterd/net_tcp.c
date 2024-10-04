@@ -2,6 +2,11 @@
 
 #include <proxmasterd/net_tcp.h>
 
+#include <sys/eventfd.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/epoll.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
