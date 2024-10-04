@@ -56,7 +56,13 @@ struct pm_http_hdr {
 	struct pm_http_hdr_pair		*pairs;
 };
 
+struct pm_http_str {
+	char		*str;
+	size_t		len;
+};
+
 int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val);
+int pm_http_hdr_get(struct pm_http_hdr *hdr, const char *key, char **val);
 
 int pm_http_ctx_init(pm_http_ctx_t **ctx_p);
 int pm_http_ctx_add_net_ctx(pm_http_ctx_t *ctx, pm_http_net_ctx_t *net_ctx, uint8_t type);
