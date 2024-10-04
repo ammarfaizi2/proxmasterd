@@ -2,6 +2,7 @@
 
 #include <proxmasterd/http.h>
 #include <string.h>
+#include <stdio.h>
 
 static void set_arg(struct pm_http_easy_arg *arg, const char *cert, const char *key)
 {
@@ -20,6 +21,7 @@ int main(int argc, char *argv[])
 	pm_http_ctx_t *ctx;
 	int err;
 
+	setvbuf(stdout, NULL, _IONBF, 0);
 	set_arg(&arg, "./q.pem", "./q.key");
 	err = pm_http_ctx_easy_init(&ctx, &arg);
 	if (err)
