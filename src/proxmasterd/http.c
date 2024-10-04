@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include <proxmasterd/http.h>
+#include <ctype.h>
+#include <assert.h>
 
 struct pm_http_net_ctx_arr {
 	size_t				nr_ctx;
@@ -16,11 +18,66 @@ struct pm_http_client {
 	uint8_t				method;
 	bool				use_ssl;
 	bool				keep_alive;
+
+	struct pm_http_str		uri;
+	struct pm_http_str		qs;
+	struct pm_http_str		ver;
+
 	struct pm_http_hdr		hdr;
 	struct pm_buf			*recv_buf;
 	struct pm_buf			*send_buf;
 	void				*nclient;
 };
+
+static int pm_http_str_append(struct pm_http_str *str, const char *s, size_t len)
+{
+	char *p;
+
+	p = realloc(str->str, str->len + len + 1);
+	if (!p)
+		return -ENOMEM;
+
+	memcpy(p + str->len, s, len);
+	p[str->len + len] = '\0';
+	str->str = p;
+	str->len += len;
+	return 0;
+}
+
+static void pm_http_str_free(struct pm_http_str *str)
+{
+	if (!str->str)
+		return;
+
+	free(str->str);
+	str->str = NULL;
+	str->len = 0;
+}
+
+static int pm_http_strdup(struct pm_http_str *str, const char *s, size_t len)
+{
+	char *p;
+
+	pm_http_str_free(str);
+	p = malloc(len + 1);
+	if (!p)
+		return -ENOMEM;
+
+	memcpy(p, s, len);
+	p[len] = '\0';
+	str->str = p;
+	str->len = len;
+	return 0;
+}
+
+static char *strtolower(char *str)
+{
+	char *p;
+
+	for (p = str; *p; p++)
+		*p = tolower(*p);
+	return str;
+}
 
 int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val)
 {
@@ -44,10 +101,27 @@ int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val)
 		return -ENOMEM;
 	}
 
+	pair->key = strtolower(pair->key);
 	pair->key_len = strlen(key);
 	pair->val_len = strlen(val);
 	hdr->nr_pairs = new_nr_pairs;
 	return 0;
+}
+
+int pm_http_hdr_get(struct pm_http_hdr *hdr, const char *key, char **val)
+{
+	size_t i;
+
+	for (i = 0; i < hdr->nr_pairs; i++) {
+		struct pm_http_hdr_pair *pair = &hdr->pairs[i];
+
+		if (!strcmp(pair->key, key)) {
+			*val = pair->val;
+			return 0;
+		}
+	}
+
+	return -ENOENT;
 }
 
 static void pm_http_hdr_destroy(struct pm_http_hdr *hdr)
@@ -130,7 +204,6 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg->client_init_cap = 8192;
 		parg->nr_workers = 4;
 		parg->sock_backlog = 2048;
-
 		strncpy(sarg.cert_file, arg->cert_file, sizeof(sarg.cert_file) - 1);
 		strncpy(sarg.key_file, arg->key_file, sizeof(sarg.key_file) - 1);
 		ret = pm_net_tcp_ssl_ctx_init(&net_ctx.ssl, &sarg);
@@ -255,6 +328,170 @@ void pm_http_ctx_destroy(pm_http_ctx_t *ctx_p)
 	memset(ctx_p, 0, sizeof(*ctx_p));
 }
 
+static int parse_http_hdr(struct pm_http_client *hc)
+{
+	char *method, *uri, *qs, *ver, *p, *q, *dcrlf, c;
+	char *to_null[2];
+
+	struct pm_buf *rbuf = hc->recv_buf;
+	size_t len = rbuf->len;
+	size_t eaten_len;
+
+	if (len < 6)
+		return -EAGAIN;
+
+	p = rbuf->buf;
+	method = p;
+	while (*p != ' ') {
+		c = *p;
+		if (c < 'A' || c > 'Z')
+			return -EINVAL;
+		if (p - method >= 8)
+			return -EINVAL;
+		p++;
+		len--;
+		if (!len)
+			return -EAGAIN;
+	}
+	to_null[0] = p;
+	p++;
+	len--;
+	if (!len)
+		return -EAGAIN;
+
+	dcrlf = memmem(p, len, "\r\n\r\n", 4);
+	if (!dcrlf)
+		return -EAGAIN;
+
+	if (!strncmp(method, "GET", 3))
+		hc->method = PM_HTTP_METHOD_GET;
+	else if (!strncmp(method, "POST", 4))
+		hc->method = PM_HTTP_METHOD_POST;
+	else if (!strncmp(method, "PUT", 3))
+		hc->method = PM_HTTP_METHOD_PUT;
+	else if (!strncmp(method, "DELETE", 6))
+		hc->method = PM_HTTP_METHOD_DELETE;
+	else if (!strncmp(method, "HEAD", 4))
+		hc->method = PM_HTTP_METHOD_HEAD;
+	else if (!strncmp(method, "OPTIONS", 7))
+		hc->method = PM_HTTP_METHOD_OPTIONS;
+	else if (!strncmp(method, "TRACE", 5))
+		hc->method = PM_HTTP_METHOD_TRACE;
+	else if (!strncmp(method, "CONNECT", 7))
+		hc->method = PM_HTTP_METHOD_CONNECT;
+	else if (!strncmp(method, "PATCH", 5))
+		hc->method = PM_HTTP_METHOD_PATCH;
+	else
+		return -EINVAL;
+
+	uri = p;
+	if (*p != '/')
+		return -EINVAL;
+
+	while (*p != ' ') {
+		c = *p;
+		if (c < 32 || c > 126)
+			return -EINVAL;
+		p++;
+		len--;
+		if (!len)
+			return -EAGAIN;
+	}
+	to_null[1] = p;
+	p++;
+	len--;
+	if (!len)
+		return -EAGAIN;
+
+	qs = strchr(uri, '?');
+	if (qs) {
+		*qs = '\0';
+		qs++;
+	}
+
+	ver = p;
+	if (strncmp(ver, "HTTP/1.0", 8) && strncmp(ver, "HTTP/1.1", 8))
+		return -EINVAL;
+	p += 8;
+	len -= 8;
+	if (!len) {
+		/*
+		 * Must not run out of buffer here, as we have already
+		 * checked for "\r\n\r\n" above.
+		 */
+		return -EINVAL;
+	}
+	if (memcmp(p, "\r\n", 2))
+		return -EINVAL;
+	*p = '\0';
+
+	p += 2;
+	len -= 2;
+	if (!len) {
+		/*
+		 * Must not run out of buffer here, as we have already
+		 * checked for "\r\n\r\n" above.
+		 */
+		return -EINVAL;
+	}
+
+	to_null[0][0] = '\0';
+	to_null[1][0] = '\0';
+
+	if (pm_http_strdup(&hc->uri, uri, strlen(uri)))
+		return -ENOMEM;
+
+	if (qs && pm_http_strdup(&hc->qs, qs, strlen(qs)))
+		return -ENOMEM;
+
+	if (pm_http_strdup(&hc->ver, ver, strlen(ver)))
+		return -ENOMEM;
+
+	do {
+		char *key, *val;
+
+		q = strstr(p, ": ");
+		if (!q)
+			return -EINVAL;
+
+		key = p;
+		*q = '\0';
+		p = q + 2;
+		len -= (size_t) (p - key);
+
+		q = strstr(p, "\r\n");
+		if (!q)
+			return -EINVAL;
+		val = p;
+		*q = '\0';
+
+		if (pm_http_hdr_add(&hc->hdr, key, val))
+			return -ENOMEM;
+
+		p = q + 2;
+		len -= 2;
+		if (len < 2)
+			return -EINVAL;
+		if (!memcmp(p, "\r\n", 2)) {
+			p += 2;
+			len -= 2;
+			break;
+		}
+	} while (q < dcrlf);
+
+
+	eaten_len = (size_t) (p - rbuf->buf);
+	assert(eaten_len <= rbuf->len);
+	if (eaten_len < rbuf->len) {
+		memmove(rbuf->buf, p, rbuf->len - eaten_len);
+		rbuf->len -= eaten_len;
+	} else {
+		rbuf->len = 0;
+	}
+
+	return 0;
+}
+
 static struct pm_http_client *pm_http_alloc_client(void)
 {
 	return calloc(1, sizeof(struct pm_http_client));
@@ -268,26 +505,42 @@ static void pm_http_client_close(struct pm_http_client *hc)
 		pm_net_tcp_client_user_close(hc->nclient);
 }
 
-static const char http_res[] = "HTTP/1.0 200 OK\r\n"
-	"Content-Type: text/plain\r\n"
-	"Content-Length: 13\r\n"
-	"Connection: keep-alive\r\n"
-	"\r\n"
-	"Hello World!\n";
+static const char res_test[] =
+"HTTP/1.0 200 OK\r\n"
+"Server: proxmasterd/0.0.1\r\n"
+"Content-Type: text/plain; charset=UTF-8\r\n"
+"Content-Length: 13\r\n"
+"Connection: keep-alive\r\n"
+"\r\n"
+"Hello World!\n";
 
 static int pm_http_handle_recv(struct pm_http_client *hc)
 {
-	// struct pm_buf *recv_buf = hc->recv_buf;
-	struct pm_buf *send_buf = hc->send_buf;
+	struct pm_buf *rbuf = hc->recv_buf;
+	int ret;
 
-	memcpy(send_buf->buf, http_res, sizeof(http_res));
-	send_buf->len = sizeof(http_res) - 1;
-	return 0;
+	if (rbuf->len == rbuf->cap) {
+		if (pm_buf_resize(rbuf, rbuf->cap + 1))
+			return -ENOMEM;
+	}
+	rbuf->buf[rbuf->len] = '\0';
+
+	ret = parse_http_hdr(hc);
+	if (ret < 0) {
+		if (ret != -EAGAIN || hc->recv_buf->len >= 8192)
+			pm_http_client_close(hc);
+		return ret;
+	}
+
+	return pm_buf_append(hc->send_buf, res_test, sizeof(res_test) - 1);
 }
 
 static int pm_http_handle_close(struct pm_http_client *hc)
 {
 	pm_http_hdr_destroy(&hc->hdr);
+	pm_http_str_free(&hc->uri);
+	pm_http_str_free(&hc->qs);
+	pm_http_str_free(&hc->ver);
 	free(hc);
 	return 0;
 }
