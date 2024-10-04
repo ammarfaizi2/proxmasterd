@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <stdarg.h>
 
 struct pm_net_tcp_client {
 	int				fd;
@@ -195,6 +195,28 @@ void pm_buf_destroy(struct pm_buf *b)
 {
 	free(b->buf);
 	memset(b, 0, sizeof(*b));
+}
+
+int pm_buf_append_fmt(struct pm_buf *b, const void *fmt, ...)
+{
+	va_list ap, ap2;
+	int len;
+
+	va_start(ap, fmt);
+	va_copy(ap2, ap);
+	len = vsnprintf(NULL, 0, fmt, ap);
+	if (b->cap - b->len < ((size_t)len + 1u)) {
+		if (pm_buf_resize(b, (b->len + len + 1) * 2)) {
+			va_end(ap2);
+			va_end(ap);
+			return -ENOMEM;
+		}
+	}
+	vsnprintf(b->buf + b->len, len + 1, fmt, ap2);
+	b->len += (size_t)len;
+	va_end(ap2);
+	va_end(ap);
+	return 0;
 }
 
 int pm_buf_append(struct pm_buf *b, const void *data, size_t len)

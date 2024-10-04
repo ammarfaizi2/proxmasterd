@@ -22,6 +22,15 @@ enum {
 	PM_HTTP_METHOD_PATCH	= 8
 };
 
+enum {
+	PM_HTTP_VER_09	= 0,
+	PM_HTTP_VER_10	= 1,
+	PM_HTTP_VER_11	= 2,
+	PM_HTTP_VER_20	= 3,
+	PM_HTTP_VER_30	= 4,
+	PM_HTTP_VER_31	= 5,
+};
+
 struct pm_http_net_ctx;
 struct pm_http_ctx;
 typedef struct pm_http_net_ctx pm_http_net_ctx_t;
@@ -59,6 +68,24 @@ struct pm_http_hdr {
 struct pm_http_str {
 	char		*str;
 	size_t		len;
+};
+
+struct pm_http_req {
+	uint8_t			method;
+	uint8_t			ver;
+	uint64_t		content_length;
+	uint64_t		cl_remain;
+	struct pm_http_str	uri;
+	struct pm_http_str	qs;
+	struct pm_http_hdr	hdr;
+	struct pm_buf		body;
+};
+
+struct pm_http_res {
+	uint8_t			ver;
+	uint16_t		status_code;
+	struct pm_http_hdr	hdr;
+	struct pm_buf		body;
 };
 
 int pm_http_hdr_add(struct pm_http_hdr *hdr, const char *key, const char *val);
