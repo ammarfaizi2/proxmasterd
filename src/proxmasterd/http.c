@@ -102,7 +102,7 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg.bind_addr.v6.sin6_family = AF_INET6;
 
 		parg.client_init_cap = 8192;
-		parg.nr_workers = 2;
+		parg.nr_workers = 4;
 		parg.sock_backlog = 2048;
 		ret = pm_net_tcp_ctx_init(&net_ctx.plain, &parg);
 		if (ret) {
@@ -128,7 +128,7 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg->bind_addr.v6.sin6_family = AF_INET6;
 
 		parg->client_init_cap = 8192;
-		parg->nr_workers = 2;
+		parg->nr_workers = 4;
 		parg->sock_backlog = 2048;
 
 		strncpy(sarg.cert_file, arg->cert_file, sizeof(sarg.cert_file) - 1);
