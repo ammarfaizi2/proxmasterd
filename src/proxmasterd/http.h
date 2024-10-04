@@ -11,15 +11,15 @@ enum {
 };
 
 enum {
-	PM_HTTP_METHOD_GET	= 0,
-	PM_HTTP_METHOD_POST	= 1,
-	PM_HTTP_METHOD_PUT	= 2,
-	PM_HTTP_METHOD_DELETE	= 3,
-	PM_HTTP_METHOD_HEAD	= 4,
-	PM_HTTP_METHOD_OPTIONS	= 5,
-	PM_HTTP_METHOD_TRACE	= 6,
-	PM_HTTP_METHOD_CONNECT	= 7,
-	PM_HTTP_METHOD_PATCH	= 8
+	PM_HTTP_METHOD_GET	= 1,
+	PM_HTTP_METHOD_POST	= 2,
+	PM_HTTP_METHOD_PUT	= 3,
+	PM_HTTP_METHOD_DELETE	= 4,
+	PM_HTTP_METHOD_HEAD	= 5,
+	PM_HTTP_METHOD_OPTIONS	= 6,
+	PM_HTTP_METHOD_TRACE	= 7,
+	PM_HTTP_METHOD_CONNECT	= 8,
+	PM_HTTP_METHOD_PATCH	= 9
 };
 
 enum {
@@ -97,6 +97,7 @@ int pm_http_ctx_init(pm_http_ctx_t **ctx_p);
 int pm_http_ctx_add_net_ctx(pm_http_ctx_t *ctx, pm_http_net_ctx_t *net_ctx, uint8_t type);
 int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *arg);
 void pm_http_ctx_set_req_cb(pm_http_ctx_t *ctx, pm_http_req_cb_t cb, void *arg);
+const char *pm_http_method(uint8_t method);
 
 void pm_http_ctx_run(pm_http_ctx_t *ctx);
 void pm_http_ctx_wait(pm_http_ctx_t *ctx);
