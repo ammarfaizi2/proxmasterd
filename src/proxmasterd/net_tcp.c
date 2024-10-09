@@ -1011,8 +1011,17 @@ enum {
 static int worker_wait_for_start_signal(struct pm_net_tcp_wrk *w)
 {
 	struct pm_net_tcp_ctx *ctx = w->ctx;
+	uint16_t port;
+	char buf[64];
 	int ret;
 
+	if (w->ctx->arg.bind_addr.sa.sa_family == AF_INET)
+		port = w->ctx->arg.bind_addr.v4.sin_port;
+	else
+		port = w->ctx->arg.bind_addr.v6.sin6_port;
+
+	snprintf(buf, sizeof(buf), "tcp%hu-%u", ntohs(port), w->idx);
+	pthread_setname_np(w->thread, buf);
 	pthread_mutex_lock(&ctx->start_lock);
 	while (1) {
 		if (ctx->should_stop) {

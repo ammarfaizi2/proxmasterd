@@ -258,7 +258,7 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg.bind_addr.v6.sin6_family = AF_INET6;
 
 		parg.client_init_cap = 8192;
-		parg.nr_workers = 4;
+		parg.nr_workers = arg->nr_workers;
 		parg.sock_backlog = 2048;
 		ret = pm_net_tcp_ctx_init(&net_ctx.plain, &parg);
 		if (ret) {
@@ -284,7 +284,7 @@ int pm_http_ctx_easy_init(pm_http_ctx_t **ctx_p, const struct pm_http_easy_arg *
 		parg->bind_addr.v6.sin6_family = AF_INET6;
 
 		parg->client_init_cap = 8192;
-		parg->nr_workers = 4;
+		parg->nr_workers = arg->nr_workers;
 		parg->sock_backlog = 2048;
 		strncpy(sarg.cert_file, arg->cert_file, sizeof(sarg.cert_file) - 1);
 		strncpy(sarg.key_file, arg->key_file, sizeof(sarg.key_file) - 1);
@@ -407,7 +407,6 @@ void pm_http_ctx_destroy(pm_http_ctx_t *ctx_p)
 	free(net_ctx_arr->ctx_arr);
 	free(net_ctx_arr->type_arr);
 	free(ctx_p);
-	memset(ctx_p, 0, sizeof(*ctx_p));
 }
 
 static int parse_http_hdr(struct pm_http_req *req, struct pm_buf *rbuf)

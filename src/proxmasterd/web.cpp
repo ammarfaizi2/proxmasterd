@@ -9,10 +9,12 @@
 
 using json = nlohmann::json;
 
+typedef unsigned long size_t;
+
 struct hreq {
 	struct pm_http_req *req;
 	struct pm_http_res *res;
-	prox_ent_arr *pea;
+	void *arg;
 };
 
 enum {
@@ -65,12 +67,8 @@ static void json_res(struct hreq *h, json j, int code)
 	pm_buf_append_fmt(&h->res->body, "%s\n", j2.dump(4, ' ').c_str());
 }
 
-static void rt_400_json(struct hreq *h, const char *msg)
+static void rt_400_json(struct hreq *h, json j)
 {
-	json j = {
-		{ "error", msg }
-	};
-
 	json_res(h, j, 400);
 }
 
@@ -97,7 +95,7 @@ static void rt_index(struct hreq *h)
 {
 	h->res->status_code = 200;
 	pm_http_hdr_add(&h->res->hdr, "Content-Type", "text/plain");
-	pm_buf_append_fmt(&h->res->body, "Hello, World!\n");
+	pm_buf_append_fmt(&h->res->body, "Hoody Proxy Manager API\n");
 }
 
 static bool rt_api_v1_auth(struct hreq *h)
@@ -118,41 +116,83 @@ static bool rt_api_v1_auth(struct hreq *h)
 
 static void rt_api_v1_proxy_start(struct hreq *h)
 {
+	proxmaster *pm = static_cast<proxmaster *>(h->arg);
 	const char *body = h->req->body.buf;
 	json j = json::parse(body);
-	struct prox_ent pe;
-	std::string proxy;
-	int64_t lifetime;
+	struct proxy p;
 
 	if (!j.contains("proxy") || !j["proxy"].is_string()) {
 		rt_400_json(h, "Missing 'proxy' string key");
 		return;
 	}
+	p.uri_ = j["proxy"].get<std::string>();
 
 	if (!j.contains("lifetime") || !j["lifetime"].is_number()) {
 		rt_400_json(h, "Missing 'lifetime' number key");
 		return;
 	}
+	p.lifetime_ = j["lifetime"].get<int64_t>();
+	if (p.lifetime_ < 0)
+		p.lifetime_ = -1;
 
-	proxy = j["proxy"].get<std::string>();
-	lifetime = j["lifetime"].get<int64_t>();
-	if (lifetime < 0)
-		lifetime = -1;
 
-	pe.state = PROX_ENT_ST_RUNNING;
-	pe.id = 0;
-	pe.expired_at = lifetime;
-	pe.proxy = proxy;
-	pe.auth_connect_whitelist = "";
-	pe.tun2socks.pid = 0;
-	pe.tun2socks.cmd = "/bin/sleep";
-	pe.tun2socks.set_args({ "3600" });
-	pe.tun2socks.exec_cmd();
-	pe.hev_proxy.pid = 0;
-	pe.hev_proxy.cmd = "";
-	h->pea->arr.push_back(pe);
-	h->pea->to_file("./proxmaster.json");
-	rt_200_json(h, pe.to_json());
+	if (!j.contains("port") || !j["port"].is_number()) {
+		rt_400_json(h, "Missing 'port' number key");
+		return;
+	}
+	p.port_ = j["port"].get<uint16_t>();
+
+	if (j.contains("up_limit_bytes")) {
+		if (!j["up_limit_bytes"].is_number()) {
+			rt_400_json(h, "Invalid 'up_limit_bytes' number key");
+			return;
+		}
+
+		p.up_limit_bytes_ = j["up_limit_bytes"].get<uint64_t>();
+	}
+
+	if (j.contains("up_limit_interval_ms")) {
+		if (!j["up_limit_interval_ms"].is_number()) {
+			rt_400_json(h, "Invalid 'up_limit_interval_ms' number key");
+			return;
+		}
+
+		p.up_limit_interval_ms_ = j["up_limit_interval_ms"].get<uint64_t>();
+	}
+
+	if (j.contains("down_limit_bytes")) {
+		if (!j["down_limit_bytes"].is_number()) {
+			rt_400_json(h, "Invalid 'down_limit_bytes' number key");
+			return;
+		}
+
+		p.down_limit_bytes_ = j["down_limit_bytes"].get<uint64_t>();
+	}
+
+	if (j.contains("down_limit_interval_ms")) {
+		if (!j["down_limit_interval_ms"].is_number()) {
+			rt_400_json(h, "Invalid 'down_limit_interval_ms' number key");
+			return;
+		}
+
+		p.down_limit_interval_ms_ = j["down_limit_interval_ms"].get<uint64_t>();
+	}
+
+	p.auth_connect_dst_ = gen_auth_conn_dst();
+	p.start(pm->get_socks5_bin_file());
+
+	if (p.proc_.exit_code_) {
+		json j = {
+			{ "error", "Failed to start proxy" },
+			{ "cmd_output", p.proc_.err_output_ },
+			{ "cmd_exit_code", p.proc_.exit_code_ },
+			{ "cmd_args", p.proc_.args_ }
+		};
+		rt_400_json(h, j);
+	} else {
+		p.id_ = pm->add_proxy(p);
+		rt_200_json(h, p.to_json());
+	}
 }
 
 static void rt_api_v1_proxy_stop(struct hreq *h)
@@ -161,7 +201,10 @@ static void rt_api_v1_proxy_stop(struct hreq *h)
 
 static void rt_api_v1_proxy_list(struct hreq *h)
 {
-	rt_200_json(h, h->pea->to_json());
+	proxmaster *pm = static_cast<proxmaster *>(h->arg);
+	json j = pm->get_proxy_list();
+
+	rt_200_json(h, j);
 }
 
 static const struct route routes[] = {
@@ -224,7 +267,7 @@ static void scan_route_prefixes(struct pm_http_req *req, struct pm_http_res *res
 
 	h.req = req;
 	h.res = res;
-	h.pea = static_cast<prox_ent_arr *>(arg);
+	h.arg = arg;
 
 	for (i = 0; prefixes[i].prefix; i++) {
 		plen = strlen(prefixes[i].prefix);

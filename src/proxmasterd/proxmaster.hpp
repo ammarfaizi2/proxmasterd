@@ -6,56 +6,97 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include <mutex>
+
+#include <cstdio>
 
 enum {
-	PROX_ENT_ST_RUNNING,
-	PROX_ENT_ST_STOPPED,
+	PROXY_TYPE_SOCKS5
 };
 
-struct prox_bpr {
+struct proxy_proc {
 	using json = nlohmann::json;
-	pid_t		pid;
-	std::string	cmd;
-	std::vector<std::string> args;
 
-	prox_bpr(void);
-	~prox_bpr(void);
-	json to_json(void) const;
+	int				exit_code_ = 0;
+	pid_t				pid_ = -1;
+	std::vector<std::string>	args_;
+	std::string			err_output_ = "";	/* Error output */
+
+	proxy_proc(void);
+	~proxy_proc(void);
+
+	json to_json(void);
 	void from_json(const json &j);
-	int exec_cmd(void);
-	void set_args(const std::vector<std::string> &args);
+	void start(void);
+	void stop(void);
+
+private:
+	void build_args(void);
 };
 
-struct prox_ent {
+struct proxy {
 	using json = nlohmann::json;
 
-	uint8_t		state;
-	uint64_t	id;
-	uint64_t	expired_at;
-	std::string	proxy;
-	std::string	auth_connect_whitelist;
-	struct prox_bpr	tun2socks;
-	struct prox_bpr	hev_proxy;
+	uint8_t			type_ = PROXY_TYPE_SOCKS5;
+	std::string		uri_ = "";		/* URI to proxy */
+	std::string		auth_connect_dst_ = "";	/* Destination to connect for auth */
+	int64_t			lifetime_ = 0;		/* In seconds */
+	uint16_t		port_ = 0;
 
-	prox_ent(void);
-	~prox_ent(void);
-	json to_json(void) const;
+	uint64_t		up_limit_bytes_ = 0;
+	uint64_t		up_limit_interval_ms_ = 0;
+	uint64_t		down_limit_bytes_ = 0;
+	uint64_t		down_limit_interval_ms_ = 0;
+
+	unsigned long long	id_;
+	struct proxy_proc	proc_;
+
+	proxy(void);
+	~proxy(void);
+
+	json to_json(void);
 	void from_json(const json &j);
 
-	static const char *state_int_to_str(uint8_t state);
-	static uint8_t state_str_to_int(const char *state);
+	void to_file(const std::string &path);
+	void from_file(const std::string &path);
+	void start(const std::string &bin_path);
+	void stop(void);
 };
 
-struct prox_ent_arr {
+std::string gen_auth_conn_dst(void);
+
+class proxmaster {
 	using json = nlohmann::json;
 
-	std::vector<prox_ent> arr;
+private:
+	std::vector<proxy>		proxies_;
+	std::vector<std::string>	blacklist_;
+	std::string			storage_dir_ = "";
+	std::string			blacklist_file_ = "";
+	std::string			socks5_bin_file_ = "";
+	unsigned long long		last_id_;
+	std::mutex			lock_;
+	FILE				*f_last_id_ = nullptr;
+public:
+	proxmaster(const std::string &storage_dir, const std::string &blacklist_file,
+		   const std::string &socks5_bin_file);
+	~proxmaster(void);
 
-	void add(const prox_ent &ent);
-	json to_json(void) const;
-	void from_json(const json &j);
-	void from_file(const char *file);
-	void to_file(const char *file) const;
+	void load_blacklist(void);
+	void load_proxies(void);
+	void save_proxies(void);
+	void start_proxies(void);
+	void save_last_id(void);
+
+	json get_proxy_list(void);
+
+	unsigned long long add_proxy(const proxy &p);
+	void stop_proxy(unsigned long long id);
+
+	inline std::string get_socks5_bin_file(void) const
+	{
+		return socks5_bin_file_;
+	}
 };
 
 #endif /* #ifndef PROXMASTERD__WEB_H */

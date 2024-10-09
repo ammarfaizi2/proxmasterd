@@ -11,9 +11,9 @@ LD = clang++
 OPTIMIZATION = -O2
 INCLUDE_FLAGS = -I./src
 DEFFLAGS = -D_GNU_SOURCE
-CFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
-CXXFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
-LDFLAGS = -Wall -Wextra -O2 -ggdb3 $(OPTIMIZATION)
+CFLAGS = -Wall -Wextra -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
+CXXFLAGS = -Wall -Wextra -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
+LDFLAGS = -Wall -Wextra -ggdb3 $(OPTIMIZATION)
 DEPFLAGS = -MT "$@" -MMD -MP -MF $(@:.o=.d)
 LIBS = -lpthread -lssl -lcrypto
 TARGET = proxmasterd

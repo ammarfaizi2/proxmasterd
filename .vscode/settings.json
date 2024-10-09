@@ -68,6 +68,11 @@
 		"cinttypes": "cpp",
 		"typeinfo": "cpp",
 		"valarray": "cpp",
-		"fstream": "cpp"
+		"fstream": "cpp",
+		"condition_variable": "cpp",
+		"mutex": "cpp",
+		"semaphore": "cpp",
+		"stop_token": "cpp",
+		"thread": "cpp"
 	}
 }
