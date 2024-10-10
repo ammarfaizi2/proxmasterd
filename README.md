@@ -168,7 +168,6 @@ Key points:
 # 3) POST: /api/v1/proxy/stop (Stop a proxy)
 
 Curl Example:
-Curl Example:
 ```sh
 curl -vk https://127.0.0.1:2443/api/v1/proxy/list \
   -H "Authorization: Bearer ABC123" \
