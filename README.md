@@ -10,6 +10,13 @@ PM_AUTH_TOKEN=ABC123 ./proxmasterd \
     --ssl-key-file=/tmp/key.key
 ```
 
+`PM_AUTH_TOKEN` is an environment variable used to authenticate requests via the
+`Authorization` header. Based on the above example, the client must provide a
+header `Authorization: Bearer ABC123` when making requests to the server.
+
+`PM_AUTH_TOKEN` is optional. If not provided, the server will not require
+authentication.
+
 - `--socks5-bin-file` is the path to the socks52socks5 binary.
 - `--storage-dir` is the directory to store the proxy data. If the directory
   does not exist, it will be created.
@@ -21,7 +28,8 @@ PM_AUTH_TOKEN=ABC123 ./proxmasterd \
 You must at least provide one of `--plain-port` or `--ssl-port`. If you provide
 both, the server will listen on both ports.
 
-The `--ssl-port` requires the `--ssl-cert-file` and `--ssl-key-file` to be provided.
+The `--ssl-port` requires the `--ssl-cert-file` and `--ssl-key-file` to be
+provided.
 
 
 
