@@ -145,8 +145,10 @@ Response examples:
 }
 ```
 
-Key point:
+Key points:
+- `id` is the unique identifier of the proxy.
 - `auth_connect_dst` is the destination IP address to authenticate with.
+- `expired_at` is the Unix timestamp when the proxy will expire.
 
 **Failure**
 ```json
@@ -156,6 +158,42 @@ Key point:
         "cmd_exit_code": 158,
         "cmd_output": "[00913759] info: Forwarding via SOCKS5 proxy at socks5://user:pass@127.0.0.1:5555\n[00913759] info: SOCKS5 proxy destination connect for auth: 10.55.205.40\n[00913759] perr: Failed to bind socket: Address already in use\n",
         "error": "Failed to start proxy"
+    },
+    "status": 400
+}
+```
+
+
+### 3) /api/v1/proxy/stop (Stop a proxy)
+
+Curl Example:
+Curl Example:
+```sh
+curl -vk https://127.0.0.1:2443/api/v1/proxy/list \
+  -H "Authorization: Bearer ABC123" \
+  -H "Content-Type: application/json" \
+  -X POST --data '{"id": 6}'
+```
+
+Required fields:
+- `id` is the unique identifier of the proxy to stop.
+
+Response examples:
+
+**Success:**
+```json
+{
+    "data": "Proxy stopped",
+    "status": 200
+}
+```
+
+**Failure**
+```json
+{
+    "data": {
+        "error": "Failed to stop proxy, ID is not found",
+        "id": 7
     },
     "status": 400
 }
