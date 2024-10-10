@@ -3,10 +3,12 @@
 #define PROXMASTERD__PROXMASTER_H
 
 #include <nlohmann/json.hpp>
+#include <condition_variable>
 #include <vector>
 #include <cstdint>
 #include <string>
 #include <mutex>
+#include <thread>
 
 #include <cstdio>
 
@@ -29,9 +31,6 @@ struct proxy_proc {
 	void from_json(const json &j);
 	void start(void);
 	void stop(void);
-
-private:
-	void build_args(void);
 };
 
 struct proxy {
@@ -78,6 +77,9 @@ private:
 	unsigned long long		last_id_;
 	std::mutex			lock_;
 	FILE				*f_last_id_ = nullptr;
+	std::thread			reaper_thread_;
+	std::condition_variable		reaper_cv_;
+	bool				reaper_stop_ = false;
 public:
 	proxmaster(const std::string &storage_dir, const std::string &blacklist_file,
 		   const std::string &socks5_bin_file);
@@ -88,11 +90,14 @@ public:
 	void save_proxies(void);
 	void start_proxies(void);
 	void save_last_id(void);
+	void delete_proxy_file(unsigned long long id);
 
 	json get_proxy_list(void);
 
 	unsigned long long add_proxy(const proxy &p);
+	void __stop_proxy(proxy &p);
 	void stop_proxy(unsigned long long id);
+	void reaper(void);
 
 	inline std::string get_socks5_bin_file(void) const
 	{

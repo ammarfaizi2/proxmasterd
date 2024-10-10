@@ -74,7 +74,9 @@ json proxy_proc::to_json(void)
 {
 	return {
 		{ "pid", pid_ },
-		{ "args", args_ }
+		{ "args", args_ },
+		{ "exit_code", exit_code_ },
+		{ "err_output", err_output_ }
 	};
 }
 
@@ -82,6 +84,8 @@ void proxy_proc::from_json(const json &j)
 {
 	pid_ = j["pid"];
 	args_ = j["args"];
+	err_output_ = j["err_output"];
+	exit_code_ = j["exit_code"];
 }
 
 void proxy_proc::start(void)
@@ -207,6 +211,7 @@ void proxy::start(const std::string &bin_path)
 		args.push_back(auth_connect_dst_);
 	}
 
+	printf("Starting socks5 proxy to %s (bind to %u)\n", uri_.c_str(), port_);
 	proc_.start();
 	if (!proc_.exit_code_)
 		started_at_ = time(nullptr);
@@ -235,7 +240,9 @@ void proxy::from_json(const json &j)
 	type_ = j["type"];
 	uri_ = j["uri"];
 	auth_connect_dst_ = j["auth_connect_dst"];
-	lifetime_ = j["lifetime"];
+	expired_at_ = j["expired_at"];
+	started_at_ = j["started_at"];
+	port_ = j["port"];
 	id_ = j["id"];
 	proc_.from_json(j["proc"]);
 }
@@ -302,9 +309,12 @@ proxmaster::proxmaster(const std::string &storage_dir,
 	if (!f_last_id_)
 		throw std::runtime_error("Failed to open last_id file: " + last_id_file + ": " + strerror(errno));
 
+	fscanf(f_last_id_, "%llu", &last_id_);
+
 	try {
 		load_blacklist();
 		load_proxies();
+		reaper_thread_ = std::thread([this] { reaper(); });
 	} catch (...) {
 		fclose(f_last_id_);
 		throw;
@@ -315,6 +325,11 @@ proxmaster::~proxmaster(void)
 {
 	save_proxies();
 	fclose(f_last_id_);
+
+	std::lock_guard<std::mutex> lock(lock_);
+	reaper_stop_ = true;
+	reaper_cv_.notify_all();
+	reaper_thread_.join();
 }
 
 inline void proxmaster::load_blacklist(void)
@@ -336,6 +351,17 @@ inline void proxmaster::load_blacklist(void)
 		blacklist_.push_back(buf);
 	}
 	fclose(p);
+}
+
+inline void proxmaster::delete_proxy_file(unsigned long long id)
+{
+	std::string path = storage_dir_ + "/proxies/";
+	char buf[64];
+
+	snprintf(buf, sizeof(buf), "%016llu.json", id);
+	path += buf;
+
+	remove(path.c_str());
 }
 
 inline void proxmaster::load_proxies(void)
@@ -370,6 +396,14 @@ inline void proxmaster::load_proxies(void)
 			continue;
 
 		p.from_file(path);
+
+		if (p.expired_at_ && p.expired_at_ < time(nullptr)) {
+			printf("Proxy %llu expired\n", p.id_);
+			delete_proxy_file(p.id_);
+			continue;
+		}
+
+		p.start(socks5_bin_file_);
 		proxies_.push_back(p);
 	}
 	closedir(d);
@@ -383,7 +417,7 @@ inline void proxmaster::save_proxies(void)
 
 	flock(fileno(f_last_id_), LOCK_EX);
 	for (auto &p : proxies_) {
-		snprintf(buf, sizeof(buf), "%012llu.json", p.id_);
+		snprintf(buf, sizeof(buf), "%016llu.json", p.id_);
 		path = proxies_dir + "/" + buf;
 		p.to_file(path);
 	}
@@ -399,7 +433,8 @@ inline void proxmaster::start_proxies(void)
 inline void proxmaster::save_last_id(void)
 {
 	flock(fileno(f_last_id_), LOCK_EX);
-	fseek(f_last_id_, 0, SEEK_SET);
+	rewind(f_last_id_);
+	ftruncate64(fileno(f_last_id_), 0);
 	fprintf(f_last_id_, "%llu\n", last_id_);
 	fflush(f_last_id_);
 	flock(fileno(f_last_id_), LOCK_UN);
@@ -429,11 +464,17 @@ unsigned long long proxmaster::add_proxy(const proxy &p)
 	std::lock_guard<std::mutex> lock(lock_);
 
 	p2.id_ = ++last_id_;
-	proxies_.push_back(p);
+	proxies_.push_back(p2);
 	save_last_id();
 	save_proxies();
-
+	reaper_cv_.notify_all();
 	return p2.id_;
+}
+
+void proxmaster::__stop_proxy(proxy &p)
+{
+	p.stop();
+	delete_proxy_file(p.id_);
 }
 
 void proxmaster::stop_proxy(unsigned long long id)
@@ -445,9 +486,57 @@ void proxmaster::stop_proxy(unsigned long long id)
 		if (proxies_[i].id_ != id)
 			continue;
 
-		proxies_[i].stop();
+		__stop_proxy(proxies_[i]);
 		proxies_.erase(proxies_.begin() + i);
 		save_proxies();
 		break;
 	}
+
+	reaper_cv_.notify_all();
+}
+
+inline void proxmaster::reaper(void)
+{
+	std::unique_lock<std::mutex> lock(lock_);
+	int64_t min_to_exp = 1000000;
+	bool got_a_stop;
+	size_t i;
+
+	while (!reaper_stop_) {
+
+		got_a_stop = false;
+		for (i = 0; i < proxies_.size(); i++) {
+			proxy &p = proxies_[i];
+			int64_t to_exp;
+
+			if (p.proc_.exit_code_) {
+				printf("Proxy %llu exited with code %d\n", p.id_, p.proc_.exit_code_);
+				p.stop();
+			}
+			
+			if (!p.expired_at_)
+				continue;
+
+			to_exp = p.expired_at_ - time(nullptr);
+
+			if (to_exp <= 0) {
+				printf("Proxy %llu expired\n", p.id_);
+				__stop_proxy(p);
+				proxies_.erase(proxies_.begin() + i);
+				save_proxies();
+				got_a_stop = true;
+				break;
+			} else if (to_exp < min_to_exp && to_exp > 0) {
+				min_to_exp = to_exp;
+			}
+		}
+
+		if (!got_a_stop)
+			min_to_exp = 1;
+
+		reaper_cv_.wait_for(lock, std::chrono::seconds(min_to_exp));
+	}
+
+	for (auto &p : proxies_)
+		p.stop();
 }
