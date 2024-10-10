@@ -26,14 +26,10 @@ authentication.
 - `--ssl-key-file` is the path to the SSL key file.
 
 You must at least provide one of `--plain-port` or `--ssl-port`. If you provide
-both, the server will listen on both ports.
+both, the server will listen on both ports. The `--ssl-port` requires the
+`--ssl-cert-file` and `--ssl-key-file` options to be provided.
 
-The `--ssl-port` requires the `--ssl-cert-file` and `--ssl-key-file` to be
-provided.
-
-
-
-# Routes:
+# Available Routes:
 1) <a href="#1-get-apiv1proxylist-list-all-proxies">GET: /api/v1/proxy/list (List all proxies)</a>
 2) <a href="#2-post-apiv1proxystart-start-a-new-proxy">POST: /api/v1/proxy/start (Start a new proxy)</a>
 
@@ -127,35 +123,38 @@ Response examples:
 ```json
 {
     "data": {
-        "auth_connect_dst": "10.55.247.55",
-        "down_limit_bytes": 0,
-        "down_limit_interval_ms": 0,
-        "expired_at": 1728526225,
-        "id": 4,
+        "auth_connect_dst": "10.55.5.38",
+        "down_limit_bytes": 3000000,
+        "down_limit_interval_ms": 1000,
+        "expired_at": 1728527623,
+        "id": 6,
         "port": 1444,
         "proc": {
-            "args": ["/tmp/socks52socks5", "--workers", "4", "--bind", "0.0.0.0:1444", "--as-socks5", "--to-socks5", "socks5://user:pass@127.0.0.1:5555", "--socks5-dst-cauth", "10.55.247.55"],
+            "args": ["/tmp/socks52socks5", "--workers", "4", "--bind", "0.0.0.0:1444", "--as-socks5", "--to-socks5", "socks5://user:pass@127.0.0.1:5555", "--up-limit", "3000000", "--up-interval", "1000", "--down-limit", "3000000", "--down-interval", "1000", "--socks5-dst-cauth", "10.55.5.38"],
             "err_output": "",
             "exit_code": 0,
-            "pid": 865896
+            "pid": 913069
         },
-        "started_at": 1728525925,
+        "started_at": 1728527323,
         "type": 0,
-        "up_limit_bytes": 0,
-        "up_limit_interval_ms": 0,
+        "up_limit_bytes": 3000000,
+        "up_limit_interval_ms": 1000,
         "uri": "socks5://user:pass@127.0.0.1:5555"
     },
     "status": 200
 }
 ```
 
+Key point:
+- `auth_connect_dst` is the destination IP address to authenticate with.
+
 - Failure:
 ```json
 {
     "data": {
-        "cmd_args": [ "/tmp/socks52socks5", "--workers", "4", "--bind", "0.0.0.0:1444", "--as-socks5", "--to-socks5", "socks5://user:pass@127.0.0.1:5555", "--up-limit", "3000000", "--up-interval", "1000", "--down-limit", "3000000", "--down-interval", "1000", "--socks5-dst-cauth", "10.55.1.57" ],
+        "cmd_args": ["/tmp/socks52socks5", "--workers", "4", "--bind", "0.0.0.0:1444", "--as-socks5", "--to-socks5", "socks5://user:pass@127.0.0.1:5555", "--up-limit", "3000000", "--up-interval", "1000", "--down-limit", "3000000", "--down-interval", "1000", "--socks5-dst-cauth", "10.55.205.40"],
         "cmd_exit_code": 158,
-        "cmd_output": "[00883858] info: Forwarding via SOCKS5 proxy at socks5://user:pass@127.0.0.1:5555\n[00883858] info: SOCKS5 proxy destination connect for auth: 10.55.1.57\n[00883858] perr: Failed to bind socket: Address already in use\n",
+        "cmd_output": "[00913759] info: Forwarding via SOCKS5 proxy at socks5://user:pass@127.0.0.1:5555\n[00913759] info: SOCKS5 proxy destination connect for auth: 10.55.205.40\n[00913759] perr: Failed to bind socket: Address already in use\n",
         "error": "Failed to start proxy"
     },
     "status": 400
