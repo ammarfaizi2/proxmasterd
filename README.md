@@ -11,7 +11,8 @@ PM_AUTH_TOKEN=ABC123 ./proxmasterd \
 ```
 
 - `--socks5-bin-file` is the path to the socks52socks5 binary.
-- `--storage-dir` is the directory to store the proxy data. If the directory does not exist, it will be created.
+- `--storage-dir` is the directory to store the proxy data. If the directory
+  does not exist, it will be created.
 - `--plain-port` is the port to listen for plain HTTP requests.
 - `--ssl-port` is the port to listen for HTTPS requests.
 - `--ssl-cert-file` is the path to the SSL certificate file.
@@ -19,6 +20,10 @@ PM_AUTH_TOKEN=ABC123 ./proxmasterd \
 
 You must at least provide one of `--plain-port` or `--ssl-port`. If you provide
 both, the server will listen on both ports.
+
+The `--ssl-port` requires the `--ssl-cert-file` and `--ssl-key-file` to be provided.
+
+
 
 # Routes:
 1) <a href="#1-get-apiv1proxylist-list-all-proxies">GET: /api/v1/proxy/list (List all proxies)</a>
