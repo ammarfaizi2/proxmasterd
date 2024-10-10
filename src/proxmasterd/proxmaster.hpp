@@ -40,7 +40,8 @@ struct proxy {
 	uint8_t			type_ = PROXY_TYPE_SOCKS5;
 	std::string		uri_ = "";		/* URI to proxy */
 	std::string		auth_connect_dst_ = "";	/* Destination to connect for auth */
-	int64_t			lifetime_ = 0;		/* In seconds */
+	int64_t			expired_at_ = 0;	/* Unix timestamp */
+	int64_t			started_at_ = 0;	/* Unix timestamp */
 	uint16_t		port_ = 0;
 
 	uint64_t		up_limit_bytes_ = 0;

@@ -208,6 +208,8 @@ void proxy::start(const std::string &bin_path)
 	}
 
 	proc_.start();
+	if (!proc_.exit_code_)
+		started_at_ = time(nullptr);
 }
 
 json proxy::to_json(void)
@@ -216,7 +218,8 @@ json proxy::to_json(void)
 		{ "type", type_ },
 		{ "uri", uri_ },
 		{ "auth_connect_dst", auth_connect_dst_ },
-		{ "lifetime", lifetime_ },
+		{ "expired_at", expired_at_ },
+		{ "started_at", started_at_ },
 		{ "port", port_ },
 		{ "up_limit_bytes", up_limit_bytes_ },
 		{ "up_limit_interval_ms", up_limit_interval_ms_ },

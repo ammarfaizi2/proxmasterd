@@ -119,6 +119,7 @@ static void rt_api_v1_proxy_start(struct hreq *h)
 	proxmaster *pm = static_cast<proxmaster *>(h->arg);
 	const char *body = h->req->body.buf;
 	json j = json::parse(body);
+	int64_t lifetime;
 	struct proxy p;
 
 	if (!j.contains("proxy") || !j["proxy"].is_string()) {
@@ -131,10 +132,11 @@ static void rt_api_v1_proxy_start(struct hreq *h)
 		rt_400_json(h, "Missing 'lifetime' number key");
 		return;
 	}
-	p.lifetime_ = j["lifetime"].get<int64_t>();
-	if (p.lifetime_ < 0)
-		p.lifetime_ = -1;
+	lifetime = j["lifetime"].get<int64_t>();
+	if (lifetime < 0)
+		lifetime = -1;
 
+	p.expired_at_ = lifetime ? time(nullptr) + lifetime : 0;
 
 	if (!j.contains("port") || !j["port"].is_number()) {
 		rt_400_json(h, "Missing 'port' number key");
