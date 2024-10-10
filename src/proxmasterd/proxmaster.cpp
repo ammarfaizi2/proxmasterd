@@ -477,9 +477,10 @@ void proxmaster::__stop_proxy(proxy &p)
 	delete_proxy_file(p.id_);
 }
 
-void proxmaster::stop_proxy(unsigned long long id)
+int proxmaster::stop_proxy(unsigned long long id)
 {
 	std::lock_guard<std::mutex> lock(lock_);
+	int ret = -ENOENT;
 	size_t i;
 
 	for (i = 0; i < proxies_.size(); i++) {
@@ -489,10 +490,11 @@ void proxmaster::stop_proxy(unsigned long long id)
 		__stop_proxy(proxies_[i]);
 		proxies_.erase(proxies_.begin() + i);
 		save_proxies();
-		break;
+		ret = 0;
 	}
 
 	reaper_cv_.notify_all();
+	return ret;
 }
 
 inline void proxmaster::reaper(void)

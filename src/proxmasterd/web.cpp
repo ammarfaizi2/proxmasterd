@@ -199,6 +199,27 @@ static void rt_api_v1_proxy_start(struct hreq *h)
 
 static void rt_api_v1_proxy_stop(struct hreq *h)
 {
+	proxmaster *pm = static_cast<proxmaster *>(h->arg);
+	const char *body = h->req->body.buf;
+	json j = json::parse(body);
+	int ret;
+
+	if (!j.contains("id") || !j["id"].is_number()) {
+		rt_400_json(h, "Missing 'id' number key");
+		return;
+	}
+
+	unsigned long long id = j["id"].get<unsigned long long>();
+	ret = pm->stop_proxy(id);
+	if (ret == 0) {
+		rt_200_json(h, "Proxy stopped");
+	} else {
+		json j = {
+			{ "error", "Failed to stop proxy, ID is not found" },
+			{ "id", id }
+		};
+		rt_400_json(h, j);
+	}
 }
 
 static void rt_api_v1_proxy_list(struct hreq *h)

@@ -96,7 +96,7 @@ public:
 
 	unsigned long long add_proxy(const proxy &p);
 	void __stop_proxy(proxy &p);
-	void stop_proxy(unsigned long long id);
+	int stop_proxy(unsigned long long id);
 	void reaper(void);
 
 	inline std::string get_socks5_bin_file(void) const
