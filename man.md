@@ -1,6 +1,6 @@
 
 # Command Examples
-```
+```sh
 PM_AUTH_TOKEN=ABC123 ./proxmasterd \
     --socks5-bin-file=/tmp/socks52socks5 \
     --storage-dir=/tmp/proxmasterd \
@@ -84,7 +84,9 @@ curl -vk https://127.0.0.1:2443/api/v1/proxy/list \
 }'
 ```
 
-Response example:
+Response examples:
+
+- Success:
 ```json
 {
     "data": {
@@ -95,18 +97,7 @@ Response example:
         "id": 4,
         "port": 1444,
         "proc": {
-            "args": [
-                "/tmp/socks52socks5",
-                "--workers",
-                "4",
-                "--bind",
-                "0.0.0.0:1444",
-                "--as-socks5",
-                "--to-socks5",
-                "socks5://user:pass@127.0.0.1:5555",
-                "--socks5-dst-cauth",
-                "10.55.247.55"
-            ],
+            "args": ["/tmp/socks52socks5", "--workers", "4", "--bind", "0.0.0.0:1444", "--as-socks5", "--to-socks5", "socks5://user:pass@127.0.0.1:5555", "--socks5-dst-cauth", "10.55.247.55"],
             "err_output": "",
             "exit_code": 0,
             "pid": 865896
@@ -121,29 +112,11 @@ Response example:
 }
 ```
 
+- Failure:
 ```json
 {
     "data": {
-        "cmd_args": [
-            "/tmp/socks52socks5",
-            "--workers",
-            "4",
-            "--bind",
-            "0.0.0.0:1444",
-            "--as-socks5",
-            "--to-socks5",
-            "socks5://user:pass@127.0.0.1:5555",
-            "--up-limit",
-            "3000000",
-            "--up-interval",
-            "1000",
-            "--down-limit",
-            "3000000",
-            "--down-interval",
-            "1000",
-            "--socks5-dst-cauth",
-            "10.55.1.57"
-        ],
+        "cmd_args": [ "/tmp/socks52socks5", "--workers", "4", "--bind", "0.0.0.0:1444", "--as-socks5", "--to-socks5", "socks5://user:pass@127.0.0.1:5555", "--up-limit", "3000000", "--up-interval", "1000", "--down-limit", "3000000", "--down-interval", "1000", "--socks5-dst-cauth", "10.55.1.57" ],
         "cmd_exit_code": 158,
         "cmd_output": "[00883858] info: Forwarding via SOCKS5 proxy at socks5://user:pass@127.0.0.1:5555\n[00883858] info: SOCKS5 proxy destination connect for auth: 10.55.1.57\n[00883858] perr: Failed to bind socket: Address already in use\n",
         "error": "Failed to start proxy"
