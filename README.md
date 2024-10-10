@@ -119,7 +119,7 @@ Optional fields:
 
 Response examples:
 
-- Success:
+**Success:**
 ```json
 {
     "data": {
@@ -148,7 +148,7 @@ Response examples:
 Key point:
 - `auth_connect_dst` is the destination IP address to authenticate with.
 
-- Failure:
+**Failure**
 ```json
 {
     "data": {
