@@ -3,6 +3,7 @@
 #include <proxmasterd/http.h>
 #include <ctype.h>
 #include <assert.h>
+#include <string.h>
 
 struct pm_http_net_ctx_arr {
 	size_t				nr_ctx;

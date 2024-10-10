@@ -16,24 +16,53 @@ CXXFLAGS = -Wall -Wextra -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
 LDFLAGS = -Wall -Wextra -ggdb3 $(OPTIMIZATION)
 DEPFLAGS = -MT "$@" -MMD -MP -MF $(@:.o=.d)
 LIBS = -lpthread -lssl -lcrypto
-TARGET = proxmasterd
+TARGET_PM = proxmasterd
+TARGET_SS = socks52socks5
 
-C_SOURCES = \
+C_PM_SOURCES = \
 	src/proxmasterd/http.c \
 	src/proxmasterd/net_tcp_ssl.c \
 	src/proxmasterd/net_tcp.c
 
-CXX_SOURCES = \
+CXX_PM_SOURCES = \
 	src/proxmasterd/entry.cpp \
 	src/proxmasterd/proxmaster.cpp \
 	src/proxmasterd/web.cpp
 
-OBJECTS = $(C_SOURCES:.c=.c.o) $(CXX_SOURCES:.cpp=.cpp.o)
+PM_OBJECTS = $(C_PM_SOURCES:.c=.c.o) $(CXX_PM_SOURCES:.cpp=.cpp.o)
+PM_SHARED_LIBS = \
+	/lib/x86_64-linux-gnu/libssl.so.3 \
+	/lib/x86_64-linux-gnu/libcrypto.so.3 \
+	/lib/x86_64-linux-gnu/libstdc++.so.6 \
+	/lib/x86_64-linux-gnu/libm.so.6 \
+	/lib/x86_64-linux-gnu/libgcc_s.so.1 \
+	/lib/x86_64-linux-gnu/libc.so.6 \
+	/lib64/ld-linux-x86-64.so.2
+
+C_SS_SOURCES = \
+	speedmgr/speedmgr.c
+
+CXX_SS_SOURCES = \
+	speedmgr/ht.cpp
+
+SS_OBJECTS = $(C_SS_SOURCES:.c=.c.o) $(CXX_SS_SOURCES:.cpp=.cpp.o)
+SS_SHARED_LIBS = \
+	/lib/x86_64-linux-gnu/libssl.so.3 \
+	/lib/x86_64-linux-gnu/libcrypto.so.3 \
+	/lib/x86_64-linux-gnu/libstdc++.so.6 \
+	/lib/x86_64-linux-gnu/libm.so.6 \
+	/lib/x86_64-linux-gnu/libgcc_s.so.1 \
+	/lib/x86_64-linux-gnu/libc.so.6 \
+	/lib64/ld-linux-x86-64.so.2
+
 DEPS = $(OBJECTS:.o=.d)
 
-all: $(TARGET)
+all: $(TARGET_PM) $(TARGET_SS)
 
-$(TARGET): $(OBJECTS)
+$(TARGET_PM): $(PM_OBJECTS)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+$(TARGET_SS): $(SS_OBJECTS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 -include $(DEPS)
@@ -45,6 +74,14 @@ $(TARGET): $(OBJECTS)
 	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(TARGET) $(OBJECTS) $(DEPS)
+	rm -rf $(TARGET_PM) $(TARGET_SS) $(PM_OBJECTS) $(SS_OBJECTS) $(DEPS) bin
 
-.PHONY: all clean
+pack: $(TARGET_PM) $(TARGET_SS)
+	mkdir -pv bin
+	cp -v $(TARGET_PM) bin/
+	cp -v $(TARGET_SS) bin/
+	cp -vf $(PM_SHARED_LIBS) bin/
+	cp -vf $(SS_SHARED_LIBS) bin/
+	chmod -vR 755 bin
+
+.PHONY: all clean pack

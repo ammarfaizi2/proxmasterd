@@ -3,6 +3,7 @@
 #include <proxmasterd/net_tcp_ssl.h>
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
 
 struct pm_net_tcp_ssl_ctx {
 	SSL_CTX				*ssl_ctx;
