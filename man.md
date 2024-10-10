@@ -11,7 +11,10 @@ PM_AUTH_TOKEN=ABC123 ./proxmasterd \
 ```
 
 # Routes:
-## 1) GET: /api/v1/proxy/list (List all proxies)
+1) <a href="#1-get-apiv1proxylist-list-all-proxies">GET: /api/v1/proxy/list (List all proxies)</a>
+2) <a href="#2-post-apiv1proxystart-start-a-new-proxy">POST: /api/v1/proxy/start (Start a new proxy)</a>
+
+### 1) GET: /api/v1/proxy/list (List all proxies)
 
 Curl example:
 ```sh
@@ -65,7 +68,7 @@ Response example:
 }
 ```
 
-## 2) POST: /api/v1/proxy/start (Start a new proxy)
+### 2) POST: /api/v1/proxy/start (Start a new proxy)
 
 Curl Example:
 ```sh
