@@ -1,5 +1,5 @@
 
-# Command Examples
+# How to run the server
 ```sh
 PM_AUTH_TOKEN=ABC123 ./proxmasterd \
     --socks5-bin-file=/tmp/socks52socks5 \
