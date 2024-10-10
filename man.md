@@ -84,6 +84,17 @@ curl -vk https://127.0.0.1:2443/api/v1/proxy/list \
 }'
 ```
 
+Required fields:
+- `proxy` is the URI of the socks5 proxy to forward to.
+- `lifetime` is the number of seconds the proxy will be active. Set to 0 for unlimited.
+- `port` is the port to bind the proxy to.
+
+Optional fields:
+- `down_limit_bytes` is the download limit in bytes.
+- `down_limit_interval_ms` is the download limit interval in milliseconds.
+- `up_limit_bytes` is the upload limit in bytes.
+- `up_limit_interval_ms` is the upload limit interval in milliseconds.
+
 Response examples:
 
 - Success:
