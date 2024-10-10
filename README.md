@@ -32,8 +32,9 @@ both, the server will listen on both ports. The `--ssl-port` requires the
 # Available Routes:
 1) <a href="#1-get-apiv1proxylist-list-all-proxies">GET: /api/v1/proxy/list (List all proxies)</a>
 2) <a href="#2-post-apiv1proxystart-start-a-new-proxy">POST: /api/v1/proxy/start (Start a new proxy)</a>
+3) <a href="#3-post-apiv1proxystop-stop-a-proxy">POST: /api/v1/proxy/stop (Stop a proxy)</a>
 
-### 1) GET: /api/v1/proxy/list (List all proxies)
+# 1) GET: /api/v1/proxy/list (List all proxies)
 
 Curl example:
 ```sh
@@ -87,7 +88,7 @@ Response example:
 }
 ```
 
-### 2) POST: /api/v1/proxy/start (Start a new proxy)
+# 2) POST: /api/v1/proxy/start (Start a new proxy)
 
 Curl Example:
 ```sh
@@ -164,7 +165,7 @@ Key points:
 ```
 
 
-### 3) /api/v1/proxy/stop (Stop a proxy)
+# 3) POST: /api/v1/proxy/stop (Stop a proxy)
 
 Curl Example:
 Curl Example:
