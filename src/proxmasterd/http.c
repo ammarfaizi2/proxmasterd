@@ -61,21 +61,6 @@ void pm_http_ctx_set_req_cb(pm_http_ctx_t *ctx, pm_http_req_cb_t cb, void *arg)
 	ctx->req_cb_arg = arg;
 }
 
-static int pm_http_str_append(struct pm_http_str *str, const char *s, size_t len)
-{
-	char *p;
-
-	p = realloc(str->str, str->len + len + 1);
-	if (!p)
-		return -ENOMEM;
-
-	memcpy(p + str->len, s, len);
-	p[str->len + len] = '\0';
-	str->str = p;
-	str->len += len;
-	return 0;
-}
-
 static void pm_http_str_free(struct pm_http_str *str)
 {
 	if (!str->str)
