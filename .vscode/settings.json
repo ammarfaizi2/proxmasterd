@@ -73,6 +73,8 @@
 		"mutex": "cpp",
 		"semaphore": "cpp",
 		"stop_token": "cpp",
-		"thread": "cpp"
+		"thread": "cpp",
+		"quota.h": "c",
+		"socket.h": "c"
 	}
 }
