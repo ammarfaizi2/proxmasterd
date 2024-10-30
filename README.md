@@ -92,7 +92,7 @@ Response example:
 
 Curl Example:
 ```sh
-curl -vk https://127.0.0.1:2443/api/v1/proxy/list \
+curl -vk https://127.0.0.1:2443/api/v1/proxy/start \
   -H "Authorization: Bearer ABC123" \
   -H "Content-Type: application/json" \
   -X POST --data \
@@ -169,7 +169,7 @@ Key points:
 
 Curl Example:
 ```sh
-curl -vk https://127.0.0.1:2443/api/v1/proxy/list \
+curl -vk https://127.0.0.1:2443/api/v1/proxy/stop \
   -H "Authorization: Bearer ABC123" \
   -H "Content-Type: application/json" \
   -X POST --data '{"id": 6}'
