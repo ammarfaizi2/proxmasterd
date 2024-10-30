@@ -22,13 +22,13 @@ TARGET_SS = socks52socks5
 C_PM_SOURCES = \
 	src/proxmasterd/http.c \
 	src/proxmasterd/net_tcp_ssl.c \
-	src/proxmasterd/net_tcp.c
+	src/proxmasterd/net_tcp.c \
+	speedmgr/quota.c
 
 CXX_PM_SOURCES = \
 	src/proxmasterd/entry.cpp \
 	src/proxmasterd/proxmaster.cpp \
-	src/proxmasterd/web.cpp \
-	speedmgr/quota.c
+	src/proxmasterd/web.cpp
 
 
 PM_OBJECTS = $(C_PM_SOURCES:.c=.c.o) $(CXX_PM_SOURCES:.cpp=.cpp.o)
