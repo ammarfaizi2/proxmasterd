@@ -191,7 +191,17 @@ void proxy::start(const std::string &bin_path)
 	args.push_back("--as-socks5");
 	args.push_back("--to-socks5");
 	args.push_back(uri_);
+	args.push_back("--quota-unix-sock");
+	args.push_back(quota_unix_control_);
 
+	if (quota_enabled_ && quota_remaining_ > 0) {
+		args.push_back("--init-quota-size");
+		args.push_back(std::to_string(quota_remaining_));
+	} else {
+		quota_enabled_ = false;
+	}
+
+	quota_exceeded_ = false;
 	if (up_limit_bytes_ && up_limit_interval_ms_) {
 		args.push_back("--up-limit");
 		args.push_back(std::to_string(up_limit_bytes_));
@@ -230,6 +240,9 @@ json proxy::to_json(void)
 		{ "up_limit_interval_ms", up_limit_interval_ms_ },
 		{ "down_limit_bytes", down_limit_bytes_ },
 		{ "down_limit_interval_ms", down_limit_interval_ms_ },
+		{ "quota", quota_remaining_ },
+		{ "quota_enabled", quota_enabled_ },
+		{ "quota_exceeded", quota_exceeded_ },
 		{ "id", id_ },
 		{ "proc", proc_.to_json() }
 	};
@@ -297,10 +310,14 @@ proxmaster::proxmaster(const std::string &storage_dir,
 {
 	std::string proxies_dir = storage_dir_ + "/proxies";
 	std::string last_id_file = storage_dir_ + "/last_id.txt";
+	std::string unix_sock_dir = storage_dir_ + "/unix_socks";
 
 	srand(time(nullptr));
 	if (!mkdir_recursive(proxies_dir.c_str()))
 		throw std::runtime_error("Failed to create proxies directory: " + proxies_dir);
+
+	if (!mkdir_recursive(unix_sock_dir.c_str()))
+		throw std::runtime_error("Failed to create unix sock directory: " + unix_sock_dir);
 
 	f_last_id_ = fopen(last_id_file.c_str(), "rb+");
 	if (!f_last_id_)

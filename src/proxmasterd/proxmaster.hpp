@@ -47,6 +47,9 @@ struct proxy {
 	uint64_t		up_limit_interval_ms_ = 0;
 	uint64_t		down_limit_bytes_ = 0;
 	uint64_t		down_limit_interval_ms_ = 0;
+	long long		quota_remaining_ = 0;
+	bool			quota_enabled_ = false;
+	bool			quota_exceeded_ = false;
 
 	unsigned long long	id_;
 	struct proxy_proc	proc_;
@@ -61,6 +64,8 @@ struct proxy {
 	void from_file(const std::string &path);
 	void start(const std::string &bin_path);
 	void stop(void);
+
+	std::string		quota_unix_control_ = "";
 };
 
 std::string gen_auth_conn_dst(void);
@@ -99,7 +104,24 @@ public:
 	int stop_proxy(unsigned long long id);
 	void reaper(void);
 
-	inline std::string get_socks5_bin_file(void) const
+	const inline std::string get_unix_sock_dir(void) const
+	{
+		return storage_dir_ + "/unix_socks";
+	}
+
+	inline std::string gen_unix_sock_path(void)
+	{
+		return get_unix_sock_dir() +
+			"/p" +
+			std::to_string(time(nullptr)) +
+			"_" +
+			std::to_string(rand() % 1000) +
+			std::to_string(rand() % 1000) +
+			std::to_string(rand() % 1000) +
+			".sock";
+	}
+
+	const inline std::string get_socks5_bin_file(void) const
 	{
 		return socks5_bin_file_;
 	}

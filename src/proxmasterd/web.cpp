@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <mutex>
+
 using json = nlohmann::json;
 
 typedef unsigned long size_t;
@@ -180,7 +182,18 @@ static void rt_api_v1_proxy_start(struct hreq *h)
 		p.down_limit_interval_ms_ = j["down_limit_interval_ms"].get<uint64_t>();
 	}
 
+	if (j.contains("quota")) {
+		if (!j["quota"].is_number()) {
+			rt_400_json(h, "Invalid 'quota' number key");
+			return;
+		}
+
+		p.quota_remaining_ = j["quota"].get<long long>();
+		p.quota_enabled_ = true;
+	}
+
 	p.auth_connect_dst_ = gen_auth_conn_dst();
+	p.quota_unix_control_ = pm->gen_unix_sock_path();
 	p.start(pm->get_socks5_bin_file());
 
 	if (p.proc_.exit_code_) {
