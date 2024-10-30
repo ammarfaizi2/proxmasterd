@@ -22,8 +22,7 @@ TARGET_SS = socks52socks5
 C_PM_SOURCES = \
 	src/proxmasterd/http.c \
 	src/proxmasterd/net_tcp_ssl.c \
-	src/proxmasterd/net_tcp.c \
-	src/proxmasterd/quota.c
+	src/proxmasterd/net_tcp.c
 
 CXX_PM_SOURCES = \
 	src/proxmasterd/entry.cpp \
