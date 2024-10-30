@@ -6,6 +6,10 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef offsetof
 #define offsetof(type, member) ((size_t) &((type *)0)->member)
 #endif
@@ -110,5 +114,9 @@ void qo_quota_unix_client_close(struct spd_quota *sq, struct spd_quota_client *c
 void qo_free(struct spd_quota *sq);
 
 #endif /* #ifdef USE_INTERNAL_SPEEDMGR_QUOTA */
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* #ifndef SPEEDMGR__QUOTA_H */

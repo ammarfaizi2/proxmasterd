@@ -9,6 +9,8 @@
 #include <sys/file.h>
 #include <sys/wait.h>
 #include <errno.h>
+#define USE_CLIENT_SPEEDMGR_QUOTA
+#include <speedmgr/quota.h>
 
 typedef unsigned long size_t;
 
@@ -171,7 +173,14 @@ void proxy_proc::stop(void)
 }
 
 proxy::proxy(void) = default;
-proxy::~proxy(void) = default;
+
+proxy::~proxy(void)
+{
+	if (qo_cl_) {
+		qo_cl_close(qo_cl_);
+		qo_cl_ = nullptr;
+	}
+}
 
 void proxy::stop(void)
 {
@@ -223,8 +232,34 @@ void proxy::start(const std::string &bin_path)
 
 	printf("Starting socks5 proxy to %s (bind to %u)\n", uri_.c_str(), port_);
 	proc_.start();
-	if (!proc_.exit_code_)
+	if (!proc_.exit_code_) {
+		static const uint32_t max_wait_attempts = 10;
+		uint32_t wait_attempts = 0;
+		struct qo_cl *qo;
+		int err;
+
 		started_at_ = time(nullptr);
+
+		while (1) {
+			err = qo_cl_init(&qo, quota_unix_control_.c_str(), 1000);
+			if (err) {
+				// Sleep for 0.5 to give the proxy time to start its unix socket.
+				usleep(500000);
+
+				if (wait_attempts++ > max_wait_attempts) {
+					printf("Failed to connect to quota control socket\n");
+					started_at_ = 0;
+					proc_.stop();
+					break;
+				}
+				continue;
+			}
+
+			break;
+		}
+
+		qo_cl_ = qo;
+	}
 }
 
 json proxy::to_json(void)
@@ -385,7 +420,6 @@ inline void proxmaster::load_proxies(void)
 {
 	std::string path, proxies_dir = storage_dir_ + "/proxies";
 	struct dirent *de;
-	proxy p;
 	DIR *d;
 
 	d = opendir(proxies_dir.c_str());
@@ -412,16 +446,17 @@ inline void proxmaster::load_proxies(void)
 		if (!is_file(path.c_str()))
 			continue;
 
-		p.from_file(path);
+		auto p = std::make_unique<proxy>();
+		p->from_file(path);
 
-		if (p.expired_at_ && p.expired_at_ < time(nullptr)) {
-			printf("Proxy %llu expired\n", p.id_);
-			delete_proxy_file(p.id_);
+		if (p->expired_at_ && p->expired_at_ < time(nullptr)) {
+			printf("Proxy %llu expired\n", p->id_);
+			delete_proxy_file(p->id_);
 			continue;
 		}
 
-		p.start(socks5_bin_file_);
-		proxies_.push_back(p);
+		p->start(socks5_bin_file_);
+		proxies_.push_back(std::move(p));
 	}
 	closedir(d);
 	flock(fileno(f_last_id_), LOCK_UN);
@@ -434,9 +469,9 @@ inline void proxmaster::save_proxies(void)
 
 	flock(fileno(f_last_id_), LOCK_EX);
 	for (auto &p : proxies_) {
-		snprintf(buf, sizeof(buf), "%016llu.json", p.id_);
+		snprintf(buf, sizeof(buf), "%016llu.json", p->id_);
 		path = proxies_dir + "/" + buf;
-		p.to_file(path);
+		p->to_file(path);
 	}
 	flock(fileno(f_last_id_), LOCK_UN);
 }
@@ -444,7 +479,7 @@ inline void proxmaster::save_proxies(void)
 inline void proxmaster::start_proxies(void)
 {
 	for (auto &p : proxies_)
-		p.start(socks5_bin_file_);
+		p->start(socks5_bin_file_);
 }
 
 inline void proxmaster::save_last_id(void)
@@ -457,12 +492,31 @@ inline void proxmaster::save_last_id(void)
 	flock(fileno(f_last_id_), LOCK_UN);
 }
 
+void proxy::sync_quota(void)
+{
+	struct quota_pkt_res res;
+	int ret;
+
+	if (!quota_enabled_)
+		return;
+
+	ret = qo_cl_do_cmd(qo_cl_, QUOTA_PKT_CMD_GET, 0, &res);
+	if (ret)
+		return;
+
+	quota_remaining_ = res.ba.after;
+	quota_exceeded_ = res.exceeded;
+	quota_enabled_ = res.enabled;
+}
+
 json proxmaster::get_proxy_list(void)
 {
 	json j = json::array();
 
-	for (auto &p : proxies_)
-		j.push_back(p.to_json());
+	for (auto &p : proxies_) {
+		p->sync_quota();
+		j.push_back(p->to_json());
+	}
 
 	return j;
 }
@@ -475,17 +529,16 @@ std::string gen_auth_conn_dst(void)
 	return buf;
 }
 
-unsigned long long proxmaster::add_proxy(const proxy &p)
+unsigned long long proxmaster::add_proxy(std::unique_ptr<proxy> p)
 {
-	struct proxy p2 = p;
 	std::lock_guard<std::mutex> lock(lock_);
 
-	p2.id_ = ++last_id_;
-	proxies_.push_back(p2);
+	p->id_ = ++last_id_;
+	proxies_.push_back(std::move(p));
 	save_last_id();
 	save_proxies();
 	reaper_cv_.notify_all();
-	return p2.id_;
+	return last_id_;
 }
 
 void proxmaster::__stop_proxy(proxy &p)
@@ -501,10 +554,10 @@ int proxmaster::stop_proxy(unsigned long long id)
 	size_t i;
 
 	for (i = 0; i < proxies_.size(); i++) {
-		if (proxies_[i].id_ != id)
+		if (proxies_[i]->id_ != id)
 			continue;
 
-		__stop_proxy(proxies_[i]);
+		__stop_proxy(*proxies_[i]);
 		proxies_.erase(proxies_.begin() + i);
 		save_proxies();
 		ret = 0;
@@ -525,7 +578,7 @@ inline void proxmaster::reaper(void)
 
 		got_a_stop = false;
 		for (i = 0; i < proxies_.size(); i++) {
-			proxy &p = proxies_[i];
+			proxy &p = *proxies_[i];
 			int64_t to_exp;
 
 			if (p.proc_.exit_code_) {
@@ -557,5 +610,5 @@ inline void proxmaster::reaper(void)
 	}
 
 	for (auto &p : proxies_)
-		p.stop();
+		p->stop();
 }

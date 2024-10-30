@@ -8,7 +8,7 @@ CC = clang
 CXX = clang++
 LD = clang++
 
-OPTIMIZATION = -O2
+OPTIMIZATION = -O2 -fsanitize=address
 INCLUDE_FLAGS = -I./src -I./
 DEFFLAGS = -D_GNU_SOURCE
 CFLAGS = -Wall -Wextra -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
@@ -23,7 +23,7 @@ C_PM_SOURCES = \
 	src/proxmasterd/http.c \
 	src/proxmasterd/net_tcp_ssl.c \
 	src/proxmasterd/net_tcp.c \
-	speedmgr/quota.c
+	src/proxmasterd/quota.c
 
 CXX_PM_SOURCES = \
 	src/proxmasterd/entry.cpp \

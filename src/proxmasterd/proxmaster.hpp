@@ -64,8 +64,18 @@ struct proxy {
 	void from_file(const std::string &path);
 	void start(const std::string &bin_path);
 	void stop(void);
+	void sync_quota(void);
 
 	std::string		quota_unix_control_ = "";
+	struct qo_cl		*qo_cl_ = nullptr;
+
+	static inline void copy(proxy &dst, proxy &src)
+	{
+		dst = src;
+
+		// Move qo_cl_, avoid double free.
+		src.qo_cl_ = nullptr;
+	}
 };
 
 std::string gen_auth_conn_dst(void);
@@ -74,17 +84,17 @@ class proxmaster {
 	using json = nlohmann::json;
 
 private:
-	std::vector<proxy>		proxies_;
-	std::vector<std::string>	blacklist_;
-	std::string			storage_dir_ = "";
-	std::string			blacklist_file_ = "";
-	std::string			socks5_bin_file_ = "";
-	unsigned long long		last_id_;
-	std::mutex			lock_;
-	FILE				*f_last_id_ = nullptr;
-	std::thread			reaper_thread_;
-	std::condition_variable		reaper_cv_;
-	bool				reaper_stop_ = false;
+	std::vector<std::unique_ptr<proxy>>		proxies_;
+	std::vector<std::string>			blacklist_;
+	std::string					storage_dir_ = "";
+	std::string					blacklist_file_ = "";
+	std::string					socks5_bin_file_ = "";
+	unsigned long long				last_id_;
+	std::mutex					lock_;
+	FILE						*f_last_id_ = nullptr;
+	std::thread					reaper_thread_;
+	std::condition_variable				reaper_cv_;
+	bool						reaper_stop_ = false;
 public:
 	proxmaster(const std::string &storage_dir, const std::string &blacklist_file,
 		   const std::string &socks5_bin_file);
@@ -99,7 +109,7 @@ public:
 
 	json get_proxy_list(void);
 
-	unsigned long long add_proxy(const proxy &p);
+	unsigned long long add_proxy(std::unique_ptr<proxy> p);
 	void __stop_proxy(proxy &p);
 	int stop_proxy(unsigned long long id);
 	void reaper(void);

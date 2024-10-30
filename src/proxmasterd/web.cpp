@@ -120,9 +120,10 @@ static void rt_api_v1_proxy_start(struct hreq *h)
 {
 	proxmaster *pm = static_cast<proxmaster *>(h->arg);
 	const char *body = h->req->body.buf;
+	auto pp = std::make_unique<proxy>();
+	struct proxy &p = *pp;
 	json j = json::parse(body);
 	int64_t lifetime;
-	struct proxy p;
 
 	if (!j.contains("proxy") || !j["proxy"].is_string()) {
 		rt_400_json(h, "Missing 'proxy' string key");
@@ -205,7 +206,7 @@ static void rt_api_v1_proxy_start(struct hreq *h)
 		};
 		rt_400_json(h, j);
 	} else {
-		p.id_ = pm->add_proxy(p);
+		p.id_ = pm->add_proxy(std::move(pp));
 		rt_200_json(h, p.to_json());
 	}
 }
