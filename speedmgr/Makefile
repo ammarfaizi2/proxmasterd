@@ -7,6 +7,7 @@ LDFLAGS = -ggdb -Os
 LIBS = -lpthread
 
 TARGET := speedmgr
+QC := qc
 
 ifeq ($(ENABLE_STATIC), 1)
 CFLAGS += -static
@@ -20,9 +21,12 @@ CXXFLAGS += -fsanitize=address
 LDFLAGS += -fsanitize=address
 endif
 
-all: $(TARGET)
+all: $(TARGET) $(QC)
 
-$(TARGET): speedmgr.o ht.o
+$(QC): qc.c
+	$(CC) $(CFLAGS) -o $@ $^
+
+$(TARGET): speedmgr.o ht.o quota.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 %.o: %.c
