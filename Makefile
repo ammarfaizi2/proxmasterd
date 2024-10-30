@@ -9,7 +9,7 @@ CXX = clang++
 LD = clang++
 
 OPTIMIZATION = -O2
-INCLUDE_FLAGS = -I./src
+INCLUDE_FLAGS = -I./src -I./
 DEFFLAGS = -D_GNU_SOURCE
 CFLAGS = -Wall -Wextra -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
 CXXFLAGS = -Wall -Wextra -ggdb3 $(OPTIMIZATION) $(INCLUDE_FLAGS) $(DEFFLAGS)
@@ -27,7 +27,9 @@ C_PM_SOURCES = \
 CXX_PM_SOURCES = \
 	src/proxmasterd/entry.cpp \
 	src/proxmasterd/proxmaster.cpp \
-	src/proxmasterd/web.cpp
+	src/proxmasterd/web.cpp \
+	speedmgr/quota.c
+
 
 PM_OBJECTS = $(C_PM_SOURCES:.c=.c.o) $(CXX_PM_SOURCES:.cpp=.cpp.o)
 PM_SHARED_LIBS = \
@@ -40,7 +42,8 @@ PM_SHARED_LIBS = \
 	/lib64/ld-linux-x86-64.so.2
 
 C_SS_SOURCES = \
-	speedmgr/speedmgr.c
+	speedmgr/speedmgr.c \
+	speedmgr/quota.c
 
 CXX_SS_SOURCES = \
 	speedmgr/ht.cpp
