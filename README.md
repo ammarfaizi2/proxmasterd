@@ -198,3 +198,137 @@ Response examples:
     "status": 400
 }
 ```
+
+# 4) POST: /api/v1/proxy/quota_cmd (Control the quota of a proxy)
+
+Curl Example:
+```sh
+curl -vk https://127.0.0.1:2443/api/v1/proxy/quota_cmd \
+  -H "Authorization: Bearer ABC123" \
+  -H "Content-Type: application/json" \
+  -X POST --data \
+'{
+    "cmd": "get",
+    "id": 10061,
+    "arg": 0
+}'
+```
+
+- The field 'id' is the unique identifier of the proxy mentioned in the `/api/v1/proxy/list` response.
+
+- The field 'cmd' is the command to execute.
+
+Available 'cmd' values:
+  - get: Get the current quota of the proxy.
+  - set: Set the quota of the proxy.
+  - add: Add to the quota of the proxy.
+  - sub: Subtract from the quota of the proxy.
+  - disable: Disable the quota of the proxy.
+  - enable: Enable the quota of the proxy.
+
+- The field 'arg' is the value to set, add, or subtract from the quota. The unit is in bytes.
+
+Request examples:
+
+1. 'add'
+```json
+{
+    "cmd": "add",
+    "id": 10061,
+    "arg": 1000000
+}
+```
+This will add 1000000 bytes (~1MB) to the quota of the proxy with ID 10061.
+
+2. 'set'
+```json
+{
+    "cmd": "set",
+    "id": 10061,
+    "arg": 1000000000
+}
+```
+This will set the quota of the proxy with ID 10061 to 1000000000 bytes (~1GB).
+
+3. 'get'
+```json
+{
+    "cmd": "get",
+    "id": 10061,
+    "arg": 0
+}
+```
+This is to get the current quota of the proxy with ID 10061.
+
+4. 'sub'
+```json
+{
+    "cmd": "sub",
+    "id": 10061,
+    "arg": 1000000
+}
+```
+This will subtract 1000000 bytes (~1MB) from the quota of the proxy with ID 10061.
+
+5. 'disable'
+```json
+{
+    "cmd": "disable",
+    "id": 10061,
+    "arg": 0
+}
+```
+This will disable the quota of the proxy with ID 10061. That also means the quota is unlimited (or not accounted for).
+
+
+6. 'enable'
+```json
+{
+    "cmd": "enable",
+    "id": 10061,
+    "arg": 0
+}
+```
+This will enable the quota of the proxy with ID 10061.
+
+
+Response example (taken from 'set' command):
+```json
+{
+    "data": {
+        "cmd_info": {
+            "arg": 1000000000,
+            "cmd": "set",
+            "res": {
+                "enabled": true,
+                "exceeded": false,
+                "quota": 1000000000,
+                "quota_before_cmd": 12
+            }
+        },
+        "proxy": {
+            "auth_connect_dst": "10.55.177.144",
+            "down_limit_bytes": 3000000,
+            "down_limit_interval_ms": 1000,
+            "expired_at": 0,
+            "id": 10061,
+            "port": 8551,
+            "proc": {
+                "args": ["./socks52socks5", "--workers", "4", "--bind", "0.0.0.0:8551", "--as-socks5", "--to-socks5", "socks5://user:pass@127.0.0.1:5555", "--quota-unix-sock", "./storage/unix_socks/p1730334488_244258292.sock", "--init-quota-size", "12", "--up-limit", "3000000", "--up-interval", "1000", "--down-limit", "3000000", "--down-interval", "1000", "--socks5-dst-cauth", "10.55.177.144"],
+                "err_output": "",
+                "exit_code": 0,
+                "pid": 589789
+            },
+            "quota": 1000000000,
+            "quota_enabled": true,
+            "quota_exceeded": false,
+            "started_at": 1730334488,
+            "type": 0,
+            "up_limit_bytes": 3000000,
+            "up_limit_interval_ms": 1000,
+            "uri": "socks5://user:pass@127.0.0.1:5555"
+        }
+    },
+    "status": 400
+}
+```
