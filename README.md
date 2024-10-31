@@ -33,6 +33,7 @@ both, the server will listen on both ports. The `--ssl-port` requires the
 1) <a href="#1-get-apiv1proxylist-list-all-proxies">GET: /api/v1/proxy/list (List all proxies)</a>
 2) <a href="#2-post-apiv1proxystart-start-a-new-proxy">POST: /api/v1/proxy/start (Start a new proxy)</a>
 3) <a href="#3-post-apiv1proxystop-stop-a-proxy">POST: /api/v1/proxy/stop (Stop a proxy)</a>
+4) <a href="#4-post-apiv1proxyquota_cmd-control-the-quota-of-a-proxy">POST: /api/v1/proxy/quota_cmd (Control the quota of a proxy)</a>
 
 # 1) GET: /api/v1/proxy/list (List all proxies)
 
