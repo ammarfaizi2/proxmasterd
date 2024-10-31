@@ -244,16 +244,56 @@ static void rt_api_v1_proxy_list(struct hreq *h)
 	rt_200_json(h, j);
 }
 
+static void rt_api_v1_proxy_quota_cmd(struct hreq *h)
+{
+	proxmaster *pm = static_cast<proxmaster *>(h->arg);
+	const char *body = h->req->body.buf;
+	json j = json::parse(body);
+	long long arg;
+	int ret;
+
+	if (!j.contains("id") || !j["id"].is_number()) {
+		rt_400_json(h, "Missing 'id' number key");
+		return;
+	}
+
+	if (!j.contains("cmd") || !j["cmd"].is_string()) {
+		rt_400_json(h, "Missing 'cmd' string key");
+		return;
+	}
+
+	if (j.contains("arg")) {
+		if (!j["arg"].is_number()) {
+			rt_400_json(h, "Invalid 'arg' number key");
+			return;
+		}
+
+		arg = j["arg"].get<long long>();
+	} else {
+		arg = 0;
+	}
+
+	unsigned long long id = j["id"].get<unsigned long long>();
+	std::string cmd = j["cmd"].get<std::string>();
+
+	json j2 = pm->quota_cmd(cmd, arg, id, &ret);
+	if (ret == 0)
+		rt_200_json(h, j2);
+	else
+		rt_400_json(h, j2);
+}
+
 static const struct route routes[] = {
 	{ { GET },	"", 		&rt_index,	nullptr },
 	{ { 0 },	nullptr,	nullptr,	nullptr }
 };
 
 static const struct route api_v1_proxy[] = {
-	{ { POST },	"/start",	&rt_api_v1_proxy_start,	&rt_api_v1_auth },
-	{ { POST },	"/stop",	&rt_api_v1_proxy_stop,	&rt_api_v1_auth },
-	{ { GET },	"/list",	&rt_api_v1_proxy_list,	&rt_api_v1_auth },
-	{ { 0 },	nullptr,	nullptr,		nullptr }
+	{ { POST },	"/start",	&rt_api_v1_proxy_start,		&rt_api_v1_auth },
+	{ { POST },	"/stop",	&rt_api_v1_proxy_stop,		&rt_api_v1_auth },
+	{ { POST },	"/quota_cmd",	&rt_api_v1_proxy_quota_cmd,	&rt_api_v1_auth },
+	{ { GET },	"/list",	&rt_api_v1_proxy_list,		&rt_api_v1_auth },
+	{ { 0 },	nullptr,	nullptr,			nullptr }
 };
 
 static const struct route_prefix prefixes[] = {

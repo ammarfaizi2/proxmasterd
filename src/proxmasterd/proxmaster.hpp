@@ -113,6 +113,7 @@ public:
 	void __stop_proxy(proxy &p);
 	int stop_proxy(unsigned long long id);
 	void reaper(void);
+	json quota_cmd(const std::string &cmd, long long arg, unsigned long long id, int *ret);
 
 	const inline std::string get_unix_sock_dir(void) const
 	{

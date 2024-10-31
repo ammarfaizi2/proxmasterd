@@ -292,6 +292,13 @@ void proxy::from_json(const json &j)
 	started_at_ = j["started_at"];
 	port_ = j["port"];
 	id_ = j["id"];
+	up_limit_bytes_ = j["up_limit_bytes"];
+	up_limit_interval_ms_ = j["up_limit_interval_ms"];
+	down_limit_bytes_ = j["down_limit_bytes"];
+	down_limit_interval_ms_ = j["down_limit_interval_ms"];
+	quota_remaining_ = j["quota"];
+	quota_enabled_ = j["quota_enabled"];
+	quota_exceeded_ = j["quota_exceeded"];
 	proc_.from_json(j["proc"]);
 }
 
@@ -447,6 +454,7 @@ inline void proxmaster::load_proxies(void)
 			continue;
 
 		auto p = std::make_unique<proxy>();
+		p->quota_unix_control_ = gen_unix_sock_path();
 		p->from_file(path);
 
 		if (p->expired_at_ && p->expired_at_ < time(nullptr)) {
@@ -496,9 +504,6 @@ void proxy::sync_quota(void)
 {
 	struct quota_pkt_res res;
 	int ret;
-
-	if (!quota_enabled_)
-		return;
 
 	ret = qo_cl_do_cmd(qo_cl_, QUOTA_PKT_CMD_GET, 0, &res);
 	if (ret)
@@ -611,4 +616,85 @@ inline void proxmaster::reaper(void)
 
 	for (auto &p : proxies_)
 		p->stop();
+}
+
+json proxmaster::quota_cmd(const std::string &cmd, long long arg, unsigned long long id, int *ret)
+{
+	std::lock_guard<std::mutex> lock(lock_);
+	struct quota_pkt_res res;
+	proxy *p = nullptr;
+	uint8_t tcmd;
+	size_t i;
+	int err;
+	json j;
+
+	for (i = 0; i < proxies_.size(); i++) {
+		if (proxies_[i]->id_ == id) {
+			p = proxies_[i].get();
+			break;
+		}
+	}
+
+	if (!p) {
+		*ret = 400;
+		j = {
+			{ "error", "Proxy not found" }
+		};
+		return j;
+	}
+
+	if (cmd == "add") {
+		tcmd = QUOTA_PKT_CMD_ADD;
+	} else if (cmd == "sub") {
+		tcmd = QUOTA_PKT_CMD_SUB;
+	} else if (cmd == "set") {
+		tcmd = QUOTA_PKT_CMD_SET;
+	} else if (cmd == "get") {
+		tcmd = QUOTA_PKT_CMD_GET;
+	} else if (cmd == "enable") {
+		tcmd = QUOTA_PKT_CMD_ENABLE;
+	} else if (cmd == "disable") {
+		tcmd = QUOTA_PKT_CMD_DISABLE;
+	} else {
+		*ret = 400;
+		j = {
+			{ "error", "Invalid command" }
+		};
+		return j;
+	}
+
+	err = qo_cl_do_cmd(p->qo_cl_, tcmd, arg, &res);
+	if (err) {
+		*ret = 400;
+		j = {
+			{ "error", "Failed to send command: " + std::to_string(err) }
+		};
+		return j;
+	}
+
+	*ret = 200;
+	j = {
+		{ "quota", res.ba.after },
+		{ "exceeded", res.exceeded },
+		{ "enabled", res.enabled }
+	};
+
+	switch (tcmd) {
+	case QUOTA_PKT_CMD_ADD:
+	case QUOTA_PKT_CMD_SUB:
+	case QUOTA_PKT_CMD_SET:
+		j["quota_before_cmd"] = res.ba.before;
+		break;
+	}
+
+	p->sync_quota();
+	*ret = 200;
+	return {
+		{ "proxy", p->to_json() },
+		{ "cmd_info", {
+			{ "res", j },
+			{ "cmd", cmd },
+			{ "arg", arg }
+		}}
+	};
 }
