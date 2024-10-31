@@ -277,7 +277,7 @@ static void rt_api_v1_proxy_quota_cmd(struct hreq *h)
 	std::string cmd = j["cmd"].get<std::string>();
 
 	json j2 = pm->quota_cmd(cmd, arg, id, &ret);
-	if (ret == 0)
+	if (ret == 200)
 		rt_200_json(h, j2);
 	else
 		rt_400_json(h, j2);
