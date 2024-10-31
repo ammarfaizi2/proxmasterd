@@ -95,6 +95,8 @@ private:
 	std::thread					reaper_thread_;
 	std::condition_variable				reaper_cv_;
 	bool						reaper_stop_ = false;
+
+	void clear_unix_socks(void);
 public:
 	proxmaster(const std::string &storage_dir, const std::string &blacklist_file,
 		   const std::string &socks5_bin_file);

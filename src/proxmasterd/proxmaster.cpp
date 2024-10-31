@@ -361,6 +361,8 @@ proxmaster::proxmaster(const std::string &storage_dir,
 	if (!mkdir_recursive(unix_sock_dir.c_str()))
 		throw std::runtime_error("Failed to create unix sock directory: " + unix_sock_dir);
 
+	clear_unix_socks();
+
 	f_last_id_ = fopen(last_id_file.c_str(), "rb+");
 	if (!f_last_id_)
 		f_last_id_ = fopen(last_id_file.c_str(), "w+");
@@ -572,19 +574,51 @@ int proxmaster::stop_proxy(unsigned long long id)
 	return ret;
 }
 
+inline void proxmaster::clear_unix_socks(void)
+{
+	struct dirent *de;
+	DIR *d;
+
+	d = opendir(get_unix_sock_dir().c_str());
+	if (!d)
+		return;
+
+	while (1) {
+		de = readdir(d);
+		if (!de)
+			break;
+
+		if (de->d_name[0] == '.')
+			continue;
+
+		// Check if it ends with .sock
+		size_t len = strlen(de->d_name);
+		if (len < 5 || strcmp(de->d_name + len - 5, ".sock"))
+			continue;
+
+		std::string path = get_unix_sock_dir() + "/" + de->d_name;
+		remove(path.c_str());
+	}
+}
+
 inline void proxmaster::reaper(void)
 {
 	std::unique_lock<std::mutex> lock(lock_);
 	int64_t min_to_exp = 1000000;
+	uint64_t iter = 0;
 	bool got_a_stop;
 	size_t i;
 
 	while (!reaper_stop_) {
+		iter++;
 
 		got_a_stop = false;
 		for (i = 0; i < proxies_.size(); i++) {
 			proxy &p = *proxies_[i];
 			int64_t to_exp;
+
+			if (iter % 64 == 0)
+				p.sync_quota();
 
 			if (p.proc_.exit_code_) {
 				printf("Proxy %llu exited with code %d\n", p.id_, p.proc_.exit_code_);
@@ -610,6 +644,9 @@ inline void proxmaster::reaper(void)
 
 		if (!got_a_stop)
 			min_to_exp = 1;
+
+		if (iter % 64 == 0)
+			save_proxies();
 
 		reaper_cv_.wait_for(lock, std::chrono::seconds(min_to_exp));
 	}
@@ -688,6 +725,7 @@ json proxmaster::quota_cmd(const std::string &cmd, long long arg, unsigned long 
 	}
 
 	p->sync_quota();
+	save_proxies();
 	*ret = 200;
 	return {
 		{ "proxy", p->to_json() },
