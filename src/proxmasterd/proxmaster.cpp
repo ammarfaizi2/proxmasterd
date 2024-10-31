@@ -185,6 +185,7 @@ proxy::~proxy(void)
 void proxy::stop(void)
 {
 	proc_.stop();
+	remove(quota_unix_control_.c_str());
 }
 
 void proxy::start(const std::string &bin_path)
