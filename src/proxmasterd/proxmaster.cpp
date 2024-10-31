@@ -658,6 +658,12 @@ inline void proxmaster::reaper(void)
 
 json proxmaster::quota_cmd(const std::string &cmd, long long arg, unsigned long long id, int *ret)
 {
+	struct {
+		long long before;
+		long long after;
+		bool exceeded;
+		bool enabled;
+	} qt;
 	std::lock_guard<std::mutex> lock(lock_);
 	struct quota_pkt_res res;
 	proxy *p = nullptr;
@@ -702,6 +708,10 @@ json proxmaster::quota_cmd(const std::string &cmd, long long arg, unsigned long 
 	}
 
 	err = qo_cl_do_cmd(p->qo_cl_, tcmd, arg, &res);
+	qt.before = res.ba.before;
+	qt.after = res.ba.after;
+	qt.exceeded = res.exceeded;
+	qt.enabled = res.enabled;
 	if (err) {
 		*ret = 400;
 		j = {
@@ -712,16 +722,16 @@ json proxmaster::quota_cmd(const std::string &cmd, long long arg, unsigned long 
 
 	*ret = 200;
 	j = {
-		{ "quota", res.ba.after },
-		{ "exceeded", res.exceeded },
-		{ "enabled", res.enabled }
+		{ "quota", qt.after },
+		{ "exceeded", qt.exceeded },
+		{ "enabled", qt.enabled }
 	};
 
 	switch (tcmd) {
 	case QUOTA_PKT_CMD_ADD:
 	case QUOTA_PKT_CMD_SUB:
 	case QUOTA_PKT_CMD_SET:
-		j["quota_before_cmd"] = res.ba.before;
+		j["quota_before_cmd"] = qt.before;
 		break;
 	}
 
