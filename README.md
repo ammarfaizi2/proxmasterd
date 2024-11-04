@@ -330,6 +330,6 @@ Response example (taken from 'set' command):
             "uri": "socks5://user:pass@127.0.0.1:5555"
         }
     },
-    "status": 400
+    "status": 200
 }
 ```
