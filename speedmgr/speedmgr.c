@@ -1,8 +1,6 @@
-// SPDX-License-Identifier: GPL-2.0-only
-
 /*
  *
- * Copyright (C) 2024  Ammar Faizi <ammarfaizi2@gnuweeb.org>
+ * Ammar Faizi <ammarfaizi2@gnuweeb.org>
  *
  * speedmgr - A simple speed manager for Linux.
  * 
