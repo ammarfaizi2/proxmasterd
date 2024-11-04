@@ -217,6 +217,8 @@ curl -vk https://127.0.0.1:2443/api/v1/proxy/quota_cmd \
 
 - The field 'id' is the unique identifier of the proxy mentioned in the `/api/v1/proxy/list` response.
 
+- The field 'arg' is the value to set, add, or subtract from the quota. The unit is in bytes.
+
 - The field 'cmd' is the command to execute.
 
 Available 'cmd' values:
@@ -227,7 +229,6 @@ Available 'cmd' values:
   - disable: Disable the quota of the proxy.
   - enable: Enable the quota of the proxy.
 
-- The field 'arg' is the value to set, add, or subtract from the quota. The unit is in bytes.
 
 Request examples:
 
